@@ -1,0 +1,550 @@
+-- ArseHub — All-in-one final script with draggable speed pad, improved aimbot, autoshoot, ESP, fly, speed, unload, theme color, minimize
+-- Paste into executor (KRNL/Synapse/Delta etc). Some features depend on executor/game behavior.
+
+-- Optional place check:
+-- if game.PlaceId ~= 286090429 then return end
+
+-- Services
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local CoreGui = game:GetService("CoreGui")
+local Workspace = workspace
+
+-- Load Orion UI
+local OrionLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/jensonhirst/Orion/main/source"))()
+
+-- Create main window
+local window = OrionLib:MakeWindow({
+    Name = "ArseHub",
+    HidePremium = false,
+    SaveConfig = true,
+    ConfigFolder = "ArseHubConfig"
+})
+
+OrionLib:MakeNotification({
+    Name = "ArseHub",
+    Content = "Right Shift = Minimize/Restore | Settings -> Unload ArseHub",
+    Image = "rbxassetid://11886682338",
+    Time = 5
+})
+
+-- ===== state & cleanup storage =====
+local unloaded = false
+local createdObjects = {}    -- list of instances to destroy on unload
+local connections = {}       -- list of connections to disconnect
+local runBindNames = {}      -- list of RunService bind names to unbind
+local ESPTags = {}           -- player -> BillboardGui
+
+local function safeDestroy(obj)
+    if obj and obj.Destroy then
+        pcall(function() obj:Destroy() end)
+    end
+end
+
+local function safeDisconnect(conn)
+    if conn and conn.Disconnect then
+        pcall(function() conn:Disconnect() end)
+    end
+end
+
+local function cleanupAll()
+    if unloaded then return end
+    unloaded = true
+
+    -- destroy created objects
+    for _, obj in pairs(createdObjects) do safeDestroy(obj) end
+    createdObjects = {}
+
+    -- remove ESPs
+    for p, g in pairs(ESPTags) do safeDestroy(g) ESPTags[p] = nil end
+
+    -- unbind any RunService binds
+    for _, name in pairs(runBindNames) do
+        pcall(function() RunService:UnbindFromRenderStep(name) end)
+    end
+    runBindNames = {}
+
+    -- disconnect connections
+    for _, c in pairs(connections) do safeDisconnect(c) end
+    connections = {}
+
+    -- remove Orion window
+    pcall(function() window:Destroy() end)
+
+    -- final notification (best-effort)
+    pcall(function()
+        OrionLib:MakeNotification({
+            Name = "ArseHub",
+            Content = "ArseHub Unloaded",
+            Image = "rbxassetid://11886682338",
+            Time = 4
+        })
+    end)
+end
+
+-- Ensure cleanup if the script is unloaded by teleport/reset
+table.insert(connections, LocalPlayer.OnTeleport:Connect(cleanupAll))
+
+-- ===== feature variables (defaults) =====
+-- GUI
+local guiVisible = true
+
+-- Aimbot
+local aimbotEnabled = false
+local aimbotHoldToAim = false
+local aimHoldKey = Enum.KeyCode.LeftAlt
+local aimFOV = 200        -- pixels
+local aimSmoothing = 0.25 -- 0..1
+local autoShootEnabled = false
+local aimIgnoreVisibility = false -- if true, aim through walls (i.e., don't raycheck)
+
+-- ESP
+local teammateESPEnabled = false
+local enemyESPEnabled = false
+local teammateColor = Color3.fromRGB(0, 255, 0)
+local enemyColor = Color3.fromRGB(255, 0, 0)
+
+-- Fly
+local isFlying = false
+local flySpeed = 50
+local flyBodyGyro, flyBodyVelocity = nil, nil
+
+-- Speed/walk
+local speedEnabled = false
+local walkSpeed = 16
+
+-- Draggable speed pad (UI) settings
+local speedPadGui, speedPadFrame, speedPadHandle
+
+-- helper: get humanoid safely
+local function getHumanoid()
+    local char = LocalPlayer.Character
+    if not char then return nil end
+    return char:FindFirstChildOfClass("Humanoid")
+end
+
+-- ===== ORION GUI: tabs & controls =====
+local tabMain = window:MakeTab({ Name = "Main", Icon = "rbxassetid://11886682338", PremiumOnly = false })
+local tabGun  = window:MakeTab({ Name = "Gun Mods", Icon = "rbxassetid://11886682338", PremiumOnly = false })
+local tabESP  = window:MakeTab({ Name = "ESP", Icon = "rbxassetid://11886682338", PremiumOnly = false })
+local tabMisc = window:MakeTab({ Name = "Misc", Icon = "rbxassetid://11886682338", PremiumOnly = false })
+local tabSettings = window:MakeTab({ Name = "Settings", Icon = "rbxassetid://11886682338", PremiumOnly = false })
+
+-- MAIN tab: Aimbot controls
+tabMain:AddLabel("Aimbot / Aim Assist")
+tabMain:AddToggle({ Name = "Aimbot", Default = false, Callback = function(v) aimbotEnabled = v end })
+tabMain:AddToggle({ Name = "Hold Aim Key", Default = false, Callback = function(v) aimbotHoldToAim = v end })
+tabMain:AddDropdown({
+    Name = "Aim Hold Key",
+    Default = "LeftAlt",
+    Options = {"LeftAlt","RightAlt","LeftShift","RightShift","E","Q"},
+    Callback = function(opt)
+        local map = { LeftAlt=Enum.KeyCode.LeftAlt, RightAlt=Enum.KeyCode.RightAlt, LeftShift=Enum.KeyCode.LeftShift, RightShift=Enum.KeyCode.RightShift, E=Enum.KeyCode.E, Q=Enum.KeyCode.Q }
+        aimHoldKey = map[opt] or Enum.KeyCode.LeftAlt
+    end
+})
+tabMain:AddSlider({ Name = "Aimbot FOV (px)", Min = 50, Max = 800, Default = aimFOV, Increment = 1, Callback = function(v) aimFOV = v end })
+tabMain:AddSlider({ Name = "Aimbot Smoothing", Min = 0, Max = 1, Default = aimSmoothing, Increment = 0.01, Callback = function(v) aimSmoothing = v end })
+tabMain:AddToggle({ Name = "Ignore Visibility (Aim through walls)", Default = false, Callback = function(v) aimIgnoreVisibility = v end })
+tabMain:AddToggle({ Name = "AutoShoot", Default = false, Callback = function(v) autoShootEnabled = v end })
+
+-- GUN MODS (placeholders)
+tabGun:AddToggle({ Name = "No Recoil", Default = false, Callback = function(v) print("No Recoil:", v) end })
+tabGun:AddToggle({ Name = "Instant Reload", Default = false, Callback = function(v) print("Instant Reload:", v) end })
+
+-- ESP tab
+tabESP:AddLabel("ESP / Wallhack")
+tabESP:AddToggle({ Name = "Wallhack (Always show ESP)", Default = false, Callback = function(v) end }) -- we rely on ignore visibility elsewhere
+tabESP:AddToggle({ Name = "Teammate ESP", Default = false, Callback = function(v) teammateESPEnabled = v end })
+tabESP:AddColorPicker({ Name = "Teammate Color", Default = teammateColor, Callback = function(c) teammateColor = c end })
+tabESP:AddToggle({ Name = "Enemy ESP", Default = false, Callback = function(v) enemyESPEnabled = v end })
+tabESP:AddColorPicker({ Name = "Enemy Color", Default = enemyColor, Callback = function(c) enemyColor = c end })
+
+-- MISC tab: include Fly and Speed here (clearly)
+tabMisc:AddLabel("Movement")
+tabMisc:AddToggle({ Name = "Fly", Default = false, Callback = function(v)
+    if v then
+        -- start fly
+        spawn(function() -- avoid blocking
+            if not isFlying then
+                -- start
+                pcall(function() startFly() end)
+            end
+        end)
+    else
+        pcall(function() stopFly() end)
+    end
+end })
+
+tabMisc:AddSlider({ Name = "Fly Speed", Min = 10, Max = 300, Default = flySpeed, Increment = 1, Callback = function(v) flySpeed = v end })
+
+tabMisc:AddToggle({ Name = "Speed Boost", Default = false, Callback = function(v)
+    speedEnabled = v
+    local hum = getHumanoid()
+    if hum then hum.WalkSpeed = (speedEnabled and walkSpeed) or 16 end
+    -- enable/disable speed pad based on toggle
+    if speedPadFrame then
+        speedPadFrame.Visible = v
+    end
+end })
+tabMisc:AddSlider({ Name = "Walk Speed", Min = 16, Max = 200, Default = walkSpeed, Increment = 1, Callback = function(v)
+    walkSpeed = v
+    if speedEnabled then
+        local hum = getHumanoid()
+        if hum then hum.WalkSpeed = walkSpeed end
+    end
+end })
+
+tabMisc:AddLabel("Extras")
+tabMisc:AddToggle({ Name = "Fling", Default = false, Callback = function(v) print("Fling:", v) end })
+
+-- SETTINGS tab: theme color and unload
+tabSettings:AddLabel("Appearance & Unload")
+local themeDefault = Color3.fromRGB(45,45,55)
+tabSettings:AddColorPicker({ Name = "Theme Color", Default = themeDefault, Callback = function(c) window:ChangeMainColor(c) end })
+
+tabSettings:AddButton({ Name = "Unload ArseHub (destroy everything)", Callback = function()
+    cleanupAll()
+end })
+
+tabSettings:AddButton({ Name = "Close (popup confirmation)", Callback = function()
+    -- Create a simple popup in CoreGui
+    if CoreGui:FindFirstChild("ArseHub_ClosePopup") then return end
+    local popup = Instance.new("ScreenGui"); popup.Name = "ArseHub_ClosePopup"; popup.ResetOnSpawn = false; popup.Parent = CoreGui; table.insert(createdObjects, popup)
+    local frame = Instance.new("Frame", popup); frame.Size = UDim2.new(0,360,0,140); frame.Position = UDim2.new(0.5,-180,0.5,-70); frame.AnchorPoint = Vector2.new(0.5,0.5); frame.BackgroundColor3 = Color3.fromRGB(35,35,45)
+    local label = Instance.new("TextLabel", frame); label.Size = UDim2.new(1,-20,0,60); label.Position = UDim2.new(0,10,0,10); label.BackgroundTransparency = 1; label.Text = "Unload ArseHub?"; label.TextScaled = true; label.Font = Enum.Font.SourceSansBold
+    local yes = Instance.new("TextButton", frame); yes.Size = UDim2.new(0.45,0,0,40); yes.Position = UDim2.new(0.05,0,1,-50); yes.Text = "Yes"; yes.BackgroundColor3 = Color3.fromRGB(0,170,0)
+    local no = Instance.new("TextButton", frame); no.Size = UDim2.new(0.45,0,0,40); no.Position = UDim2.new(0.5,0,1,-50); no.Text = "No"; no.BackgroundColor3 = Color3.fromRGB(170,0,0)
+    yes.MouseButton1Click:Connect(function() popup:Destroy(); cleanupAll() end)
+    no.MouseButton1Click:Connect(function() popup:Destroy() end)
+end })
+
+-- Add a visible Close button to the window (top-level)
+window:AddButton({ Name = "Close", Callback = function()
+    -- open the same confirmation popup via Settings' button
+    for _, child in pairs(tabSettings:GetChildren()) do
+        if child.Name == "Close (popup confirmation)" then
+            child.Callback()
+            return
+        end
+    end
+    -- fallback: call popup creation directly
+    -- (we already have a settings button; user can use that)
+end })
+
+-- Initialize Orion after building GUI
+OrionLib:Init()
+
+-- ===== ESP helpers & update =====
+local function createESP(player, color)
+    if not player or not player.Character or not player.Character:FindFirstChild("Head") then return end
+    if ESPTags[player] and ESPTags[player].Parent then
+        local existing = ESPTags[player]
+        local lab = existing:FindFirstChildWhichIsA("TextLabel", true)
+        if lab then lab.TextColor3 = Color3.new(1,1,1); lab.BackgroundColor3 = color; lab.Text = player.Name end
+        return
+    end
+    local head = player.Character:FindFirstChild("Head")
+    if not head then return end
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "ArseHub_ESP"
+    billboard.Adornee = head
+    billboard.Size = UDim2.new(0,120,0,28)
+    billboard.StudsOffset = Vector3.new(0,1.5,0)
+    billboard.AlwaysOnTop = true
+    billboard.Parent = CoreGui
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1,0,1,0)
+    label.BackgroundTransparency = 0.3
+    label.BackgroundColor3 = color
+    label.Text = player.Name
+    label.TextColor3 = Color3.new(1,1,1)
+    label.Font = Enum.Font.SourceSansBold
+    label.TextScaled = true
+    label.Parent = billboard
+    ESPTags[player] = billboard
+    table.insert(createdObjects, billboard)
+end
+
+local function removeESP(player)
+    if ESPTags[player] then safeDestroy(ESPTags[player]); ESPTags[player] = nil end
+end
+
+local function updateAllESP()
+    for _, pl in pairs(Players:GetPlayers()) do
+        if pl == LocalPlayer then removeESP(pl); continue end
+        if not pl.Character or not pl.Character:FindFirstChild("Head") then removeESP(pl); continue end
+        local alive = pl.Character:FindFirstChildOfClass("Humanoid") and pl.Character:FindFirstChildOfClass("Humanoid").Health > 0
+        if not alive then removeESP(pl); continue end
+        local isTeammate = false
+        pcall(function() if LocalPlayer.Team and pl.Team and LocalPlayer.Team == pl.Team then isTeammate = true end end)
+        if isTeammate and teammateESPEnabled then createESP(pl, teammateColor) 
+        elseif (not isTeammate) and enemyESPEnabled then createESP(pl, enemyColor)
+        else removeESP(pl)
+        end
+    end
+end
+
+table.insert(connections, Players.PlayerRemoving:Connect(function(pl) removeESP(pl) end))
+
+-- heartbeat update for ESP
+local espConn = RunService.Heartbeat:Connect(function()
+    if unloaded then return end
+    if teammateESPEnabled or enemyESPEnabled then
+        updateAllESP()
+    else
+        -- cleanup all if both false
+        for p, _ in pairs(ESPTags) do removeESP(p) end
+    end
+end)
+table.insert(connections, espConn)
+
+-- ===== Aimbot (improved, ignore visibility option) =====
+local camera = Workspace.CurrentCamera
+local mouse = LocalPlayer:GetMouse()
+local holdKeyDown = false
+
+table.insert(connections, UserInputService.InputBegan:Connect(function(inp, gpe)
+    if gpe then return end
+    if inp.KeyCode == aimHoldKey then holdKeyDown = true end
+end))
+table.insert(connections, UserInputService.InputEnded:Connect(function(inp, gpe)
+    if gpe then return end
+    if inp.KeyCode == aimHoldKey then holdKeyDown = false end
+end))
+
+local function getScreenDist(vec3)
+    local sp, onScreen = camera:WorldToViewportPoint(vec3)
+    if not onScreen then return math.huge end
+    local mpos = Vector2.new(mouse.X, mouse.Y)
+    return (Vector2.new(sp.X, sp.Y) - mpos).Magnitude
+end
+
+local function isVisibleRay(fromPos, toPos, targetChar)
+    if aimIgnoreVisibility then return true end -- if ignoring visibility, always visible
+    local params = RaycastParams.new(); params.FilterType = Enum.RaycastFilterType.Blacklist; params.FilterDescendantsInstances = { LocalPlayer.Character }; params.IgnoreWater = true
+    local ray = Workspace:Raycast(fromPos, (toPos - fromPos), params)
+    if not ray then return true end
+    if ray.Instance and ray.Instance:IsDescendantOf(targetChar) then return true end
+    return false
+end
+
+local function getBestTarget()
+    local best = nil
+    local bestDist = math.huge
+    for _, pl in pairs(Players:GetPlayers()) do
+        if pl ~= LocalPlayer and pl.Character and pl.Character:FindFirstChild("Head") then
+            local hum = pl.Character:FindFirstChildOfClass("Humanoid")
+            if hum and hum.Health > 0 then
+                local isTeammate = false
+                pcall(function() if LocalPlayer.Team and pl.Team and LocalPlayer.Team == pl.Team then isTeammate = true end end)
+                if not isTeammate then
+                    local head = pl.Character.Head
+                    local d = getScreenDist(head.Position)
+                    if d <= aimFOV and d < bestDist then
+                        if isVisibleRay(camera.CFrame.Position, head.Position, pl.Character) then
+                            best = pl; bestDist = d
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return best
+end
+
+local aimBindName = "ArseHub_Aim"
+table.insert(runBindNames, aimBindName)
+RunService:BindToRenderStep(aimBindName, Enum.RenderPriority.Character.Value + 1, function()
+    if unloaded then return end
+    local shouldAim = aimbotEnabled and (not aimbotHoldToAim or holdKeyDown)
+    if shouldAim then
+        local target = getBestTarget()
+        if target and target.Character and target.Character:FindFirstChild("Head") then
+            local headPos = target.Character.Head.Position
+            local cf = camera.CFrame
+            local desired = CFrame.new(cf.Position, headPos)
+            camera.CFrame = cf:Lerp(desired, math.clamp(aimSmoothing, 0, 1))
+            -- autoshoot best-effort
+            if autoShootEnabled then
+                -- many executors provide mouse1press/mouse1release
+                if type(mouse1press) == "function" and type(mouse1release) == "function" then
+                    pcall(function()
+                        mouse1press()
+                        task.wait(0.03)
+                        mouse1release()
+                    end)
+                else
+                    -- fallback: attempt to fire input; may not work in many executors
+                    pcall(function()
+                        local m = LocalPlayer:GetMouse()
+                        if m and m.Button1Down then
+                            -- nothing to call reliably; skip
+                        end
+                    end)
+                end
+            end
+        end
+    end
+end)
+
+-- ===== FLY implementation =====
+local flyBindName = "ArseHub_Fly"
+local function startFly()
+    if isFlying or unloaded then return end
+    local char = LocalPlayer.Character
+    if not char then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    isFlying = true
+    flyBodyGyro = Instance.new("BodyGyro"); flyBodyGyro.P = 9e4; flyBodyGyro.MaxTorque = Vector3.new(9e9,9e9,9e9); flyBodyGyro.CFrame = hrp.CFrame; flyBodyGyro.Parent = hrp; table.insert(createdObjects, flyBodyGyro)
+    flyBodyVelocity = Instance.new("BodyVelocity"); flyBodyVelocity.MaxForce = Vector3.new(9e9,9e9,9e9); flyBodyVelocity.Velocity = Vector3.new(0,0,0); flyBodyVelocity.Parent = hrp; table.insert(createdObjects, flyBodyVelocity)
+
+    RunService:BindToRenderStep(flyBindName, Enum.RenderPriority.Character.Value + 2, function()
+        if not isFlying or unloaded then return end
+        local cam = Workspace.CurrentCamera
+        local moveDir = Vector3.new(0,0,0)
+        if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + cam.CFrame.LookVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - cam.CFrame.LookVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - cam.CFrame.RightVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + cam.CFrame.RightVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then moveDir = moveDir + Vector3.new(0,1,0) end
+        if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then moveDir = moveDir + Vector3.new(0,-1,0) end
+        local mag = moveDir.Magnitude
+        if mag > 0 then moveDir = moveDir.Unit end
+        flyBodyVelocity.Velocity = moveDir * flySpeed
+        flyBodyGyro.CFrame = cam.CFrame
+    end)
+    table.insert(runBindNames, flyBindName)
+end
+
+local function stopFly()
+    if not isFlying then return end
+    isFlying = false
+    pcall(function() RunService:UnbindFromRenderStep(flyBindName) end)
+    safeDestroy(flyBodyGyro); flyBodyGyro = nil
+    safeDestroy(flyBodyVelocity); flyBodyVelocity = nil
+end
+
+-- Hook the Orcion sliders/toggles to start/stop fly and update walk speed in callbacks above
+-- (we used callbacks defined earlier that call startFly/stopFly and set humanoid walk speed)
+
+-- ===== Draggable Speed Pad UI (drag left-right to control WalkSpeed or FlySpeed) =====
+local function createSpeedPad()
+    if speedPadGui and speedPadGui.Parent then return end
+    speedPadGui = Instance.new("ScreenGui"); speedPadGui.Name = "ArseHub_SpeedPad"; speedPadGui.ResetOnSpawn = false; speedPadGui.Parent = CoreGui; table.insert(createdObjects, speedPadGui)
+    speedPadFrame = Instance.new("Frame"); speedPadFrame.Size = UDim2.new(0,280,0,70); speedPadFrame.Position = UDim2.new(0.02,0,0.8,0); speedPadFrame.BackgroundColor3 = Color3.fromRGB(30,30,40); speedPadFrame.BorderSizePixel = 0; speedPadFrame.Parent = speedPadGui
+    local title = Instance.new("TextLabel", speedPadFrame); title.Size = UDim2.new(1,0,0,20); title.Position = UDim2.new(0,0,0,0); title.BackgroundTransparency = 1; title.Text = "Speed Pad (drag)"; title.TextColor3 = Color3.new(1,1,1); title.Font = Enum.Font.SourceSansBold; title.TextScaled = true
+    local bar = Instance.new("Frame", speedPadFrame); bar.Size = UDim2.new(0.9,0,0,18); bar.Position = UDim2.new(0.05,0,0,30); bar.BackgroundColor3 = Color3.fromRGB(60,60,70); bar.BorderSizePixel = 0
+    speedPadHandle = Instance.new("Frame", bar); speedPadHandle.Size = UDim2.new(0,18,1,0); speedPadHandle.Position = UDim2.new(0,0,0,0); speedPadHandle.BackgroundColor3 = Color3.fromRGB(170,170,170); speedPadHandle.BorderSizePixel = 0
+    -- value label
+    local valLabel = Instance.new("TextLabel", speedPadFrame); valLabel.Size = UDim2.new(0.3,0,0,16); valLabel.Position = UDim2.new(0.68,0,0,6); valLabel.BackgroundTransparency = 1; valLabel.TextColor3 = Color3.new(1,1,1); valLabel.Font = Enum.Font.SourceSans; valLabel.TextScaled = true
+
+    -- Helper: map handle X to value (we will control walkSpeed if speedEnabled else flySpeed if flying)
+    local barAbsSize =  (280 * 0.9) -- approx pixels of bar width
+    local dragging = false
+    local function updateFromX(px)
+        -- convert px in [0,barWidth-handleWidth] to value range (use 16..200 for walk speed, 10..300 for fly)
+        local localX = math.clamp(px, 0, bar.AbsoluteSize.X - speedPadHandle.AbsoluteSize.X)
+        -- set handle position
+        speedPadHandle.Position = UDim2.new(0, localX, 0, 0)
+        -- compute normalized 0..1
+        local norm = localX / (bar.AbsoluteSize.X - speedPadHandle.AbsoluteSize.X)
+        -- choose which value to change depending on context: if speedEnabled (walk) then change walkSpeed; else change flySpeed
+        if speedEnabled then
+            local minV, maxV = 16, 200
+            walkSpeed = math.floor(minV + (maxV - minV) * norm + 0.5)
+            -- apply
+            local hum = getHumanoid()
+            if hum and speedEnabled then hum.WalkSpeed = walkSpeed end
+            valLabel.Text = "Walk: "..tostring(walkSpeed)
+        else
+            local minV, maxV = 10, 300
+            flySpeed = math.floor(minV + (maxV - minV) * norm + 0.5)
+            valLabel.Text = "Fly: "..tostring(flySpeed)
+        end
+    end
+
+    -- make bar.AbsoluteSize available after render
+    bar:GetPropertyChangedSignal("AbsoluteSize"):Connect(function() end)
+
+    -- Input handling for dragging
+    local uis = UserInputService
+    speedPadHandle.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then dragging = false end
+            end)
+        end
+    end)
+    local dragCon
+    dragCon = uis.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            local mouseLoc = uis:GetMouseLocation() -- screen coords
+            -- compute local position relative to bar
+            local barPos = bar.AbsolutePosition
+            local x = mouseLoc.X - barPos.X - (speedPadHandle.AbsoluteSize.X/2)
+            updateFromX(x)
+        end
+    end)
+    table.insert(connections, dragCon)
+
+    -- clicking on bar to move handle
+    bar.InputBegan:Connect(function(inp)
+        if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
+            local barPos = bar.AbsolutePosition
+            local x = inp.Position.X - barPos.X - (speedPadHandle.AbsoluteSize.X/2)
+            updateFromX(x)
+        end
+    end)
+
+    -- hide pad when neither speedEnabled nor flying
+    speedPadFrame.Visible = (speedEnabled or isFlying)
+end
+
+-- create the pad now
+createSpeedPad()
+
+-- Ensure pad removed on unload
+table.insert(createdObjects, (function() return speedPadGui end)())
+
+-- ===== GUI minimize / fade (RightShift) =====
+local function fadeGUI(visible)
+    local orionGui = CoreGui:FindFirstChild("Orion") or (LocalPlayer:FindFirstChild("PlayerGui") and LocalPlayer.PlayerGui:FindFirstChild("Orion"))
+    if not orionGui then return end
+    for _, v in pairs(orionGui:GetDescendants()) do
+        if v:IsA("Frame") or v:IsA("TextLabel") or v:IsA("TextButton") or v:IsA("ImageLabel") then
+            local props = {}
+            if v:IsA("Frame") then props.BackgroundTransparency = visible and 0 or 1 end
+            if v:IsA("TextLabel") or v:IsA("TextButton") then props.TextTransparency = visible and 0 or 1 end
+            if next(props) then TweenService:Create(v, TweenInfo.new(0.25), props):Play() end
+        end
+    end
+    orionGui.Enabled = visible
+end
+
+table.insert(connections, UserInputService.InputBegan:Connect(function(inp, gpe)
+    if gpe then return end
+    if inp.KeyCode == Enum.KeyCode.RightShift then
+        guiVisible = not guiVisible
+        fadeGUI(guiVisible)
+    end
+end))
+
+-- ===== ensure walkSpeed applied on character spawn if speedEnabled =====
+table.insert(connections, LocalPlayer.CharacterAdded:Connect(function()
+    task.wait(0.8)
+    if speedEnabled then
+        local hum = getHumanoid()
+        if hum then hum.WalkSpeed = walkSpeed end
+    end
+end))
+
+-- ===== Final notification =====
+OrionLib:MakeNotification({ Name = "ArseHub", Content = "Loaded — open GUI to configure. Use Settings -> Unload ArseHub to remove.", Time = 4 })
+
+-- End of script — cleanupAll() will remove everything if Unload or Teleport occurs.
