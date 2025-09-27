@@ -1,0 +1,562 @@
+-- Sab Enhanced Script with Key System
+local correctKey = "Sab2025"
+
+-- Services
+local CoreGui = game:GetService("CoreGui")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+-- Key Authentication
+local keyAuthentication = {
+    passed = false,
+    attempts = 0,
+    maxAttempts = 5,
+    locked = false
+}
+
+-- Kick function
+local function kickPlayer(reason)
+    if LocalPlayer and LocalPlayer.Kick then
+        LocalPlayer:Kick("Sab Helper: " .. reason)
+    else
+        game:Shutdown()
+    end
+end
+
+-- Key GUI
+local function createKeyGUI()
+    local keyGui = Instance.new("ScreenGui")
+    keyGui.Name = "Sab_KeySystem"
+    keyGui.ResetOnSpawn = false
+    keyGui.Parent = CoreGui
+
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0, 350, 0, 250)
+    frame.Position = UDim2.new(0.5, -175, 0.5, -125)
+    frame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+    frame.BorderSizePixel = 0
+    frame.Parent = keyGui
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 12)
+    corner.Parent = frame
+
+    -- Title
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, 0, 0, 50)
+    title.Position = UDim2.new(0, 0, 0, 10)
+    title.BackgroundTransparency = 1
+    title.Text = "🔑 Sab Helper Access"
+    title.TextColor3 = Color3.fromRGB(220, 220, 220)
+    title.Font = Enum.Font.GothamBold
+    title.TextSize = 22
+    title.Parent = frame
+
+    -- Discord button
+    local discordButton = Instance.new("TextButton")
+    discordButton.Size = UDim2.new(0.8, 0, 0, 35)
+    discordButton.Position = UDim2.new(0.1, 0, 0.2, 0)
+    discordButton.Text = "📢 Join Discord for Key"
+    discordButton.Font = Enum.Font.GothamBold
+    discordButton.TextSize = 12
+    discordButton.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
+    discordButton.TextColor3 = Color3.new(1, 1, 1)
+    discordButton.Parent = frame
+    
+    local discordCorner = Instance.new("UICorner")
+    discordCorner.CornerRadius = UDim.new(0, 6)
+    discordCorner.Parent = discordButton
+
+    local warningLabel = Instance.new("TextLabel")
+    warningLabel.Size = UDim2.new(0.9, 0, 0, 25)
+    warningLabel.Position = UDim2.new(0.05, 0, 0.4, 0)
+    warningLabel.BackgroundTransparency = 1
+    warningLabel.Text = "⚠️ 5 wrong attempts = auto-kick"
+    warningLabel.TextColor3 = Color3.fromRGB(255, 165, 0)
+    warningLabel.TextSize = 11
+    warningLabel.Font = Enum.Font.Gotham
+    warningLabel.Parent = frame
+
+    local textbox = Instance.new("TextBox")
+    textbox.Size = UDim2.new(0.9, 0, 0, 40)
+    textbox.Position = UDim2.new(0.05, 0, 0.55, 0)
+    textbox.PlaceholderText = "Enter access key..."
+    textbox.Text = ""
+    textbox.Font = Enum.Font.Gotham
+    textbox.TextSize = 16
+    textbox.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+    textbox.TextColor3 = Color3.new(1, 1, 1)
+    textbox.ClearTextOnFocus = false
+    
+    local textCorner = Instance.new("UICorner")
+    textCorner.CornerRadius = UDim.new(0, 6)
+    textCorner.Parent = textbox
+    textbox.Parent = frame
+
+    local statusLabel = Instance.new("TextLabel")
+    statusLabel.Size = UDim2.new(1, 0, 0, 25)
+    statusLabel.Position = UDim2.new(0, 0, 0.7, 0)
+    statusLabel.BackgroundTransparency = 1
+    statusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+    statusLabel.Text = ""
+    statusLabel.TextSize = 12
+    statusLabel.Font = Enum.Font.Gotham
+    statusLabel.Parent = frame
+
+    local button = Instance.new("TextButton")
+    button.Size = UDim2.new(0.7, 0, 0, 35)
+    button.Position = UDim2.new(0.15, 0, 0.82, 0)
+    button.Text = "🔑 Submit Key"
+    button.Font = Enum.Font.GothamBold
+    button.TextSize = 14
+    button.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
+    button.TextColor3 = Color3.new(1, 1, 1)
+    
+    local buttonCorner = Instance.new("UICorner")
+    buttonCorner.CornerRadius = UDim.new(0, 6)
+    buttonCorner.Parent = button
+    button.Parent = frame
+
+    -- Discord button functionality
+    discordButton.MouseButton1Click:Connect(function()
+        pcall(function()
+            setclipboard("https://discord.gg/9BDbbzWQKV")
+        end)
+        
+        discordButton.Text = "✅ Link Copied!"
+        discordButton.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
+        
+        task.wait(1.5)
+        discordButton.Text = "📢 Join Discord for Key"
+        discordButton.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
+    end)
+
+    -- Submit handler
+    local function handleSubmit()
+        if keyAuthentication.locked then
+            statusLabel.Text = "🔒 System locked - kicking..."
+            return
+        end
+
+        local inputKey = textbox.Text
+        if inputKey == correctKey then
+            keyAuthentication.passed = true
+            statusLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+            statusLabel.Text = "✅ Access granted!"
+            button.Text = "🎉 Loading..."
+            button.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
+            
+            -- Smooth fade out
+            local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+            
+            TweenService:Create(frame, tweenInfo, {BackgroundTransparency = 1}):Play()
+            TweenService:Create(textbox, tweenInfo, {BackgroundTransparency = 1, TextTransparency = 1}):Play()
+            TweenService:Create(button, tweenInfo, {BackgroundTransparency = 1, TextTransparency = 1}):Play()
+            TweenService:Create(title, tweenInfo, {TextTransparency = 1}):Play()
+            TweenService:Create(statusLabel, tweenInfo, {TextTransparency = 1}):Play()
+            TweenService:Create(warningLabel, tweenInfo, {TextTransparency = 1}):Play()
+            TweenService:Create(discordButton, tweenInfo, {BackgroundTransparency = 1, TextTransparency = 1}):Play()
+            
+            task.wait(0.6)
+            keyGui:Destroy()
+        else
+            keyAuthentication.attempts = keyAuthentication.attempts + 1
+            statusLabel.Text = string.format("❌ Invalid key! (%d/%d)", keyAuthentication.attempts, keyAuthentication.maxAttempts)
+            textbox.Text = ""
+            
+            if keyAuthentication.attempts >= 3 then
+                button.BackgroundColor3 = Color3.fromRGB(255, 165, 0)
+            end
+            
+            if keyAuthentication.attempts >= keyAuthentication.maxAttempts then
+                keyAuthentication.locked = true
+                statusLabel.Text = "🚫 Maximum attempts reached!"
+                button.Text = "🔴 Kicking..."
+                button.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+                
+                task.wait(2)
+                kickPlayer("Too many failed key attempts")
+            end
+        end
+    end
+
+    button.MouseButton1Click:Connect(handleSubmit)
+    textbox.FocusLost:Connect(function(enterPressed)
+        if enterPressed then handleSubmit() end
+    end)
+
+    textbox:CaptureFocus()
+    return keyGui
+end
+
+-- Wait for key authentication
+local keyGui = createKeyGUI()
+local startTime = tick()
+
+repeat
+    if keyAuthentication.locked then break end
+    task.wait(0.1)
+until keyAuthentication.passed or (tick() - startTime) > 300
+
+if not keyAuthentication.passed then
+    if keyGui then keyGui:Destroy() end
+    if not keyAuthentication.locked then
+        kickPlayer("Key authentication timeout")
+    end
+    return
+end
+
+-- ===== SAB MAIN SCRIPT =====
+local SabGui = Instance.new("ScreenGui")
+SabGui.Name = "SabHelper"
+SabGui.ResetOnSpawn = false
+SabGui.Parent = CoreGui
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 180, 0, 300)
+mainFrame.Position = UDim2.new(0, 10, 0.3, 0)
+mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+mainFrame.BorderSizePixel = 0
+mainFrame.Parent = SabGui
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 12)
+corner.Parent = mainFrame
+
+-- Drop shadow
+local shadow = Instance.new("Frame")
+shadow.Size = UDim2.new(1, 4, 1, 4)
+shadow.Position = UDim2.new(0, -2, 0, -2)
+shadow.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+shadow.BackgroundTransparency = 0.8
+shadow.BorderSizePixel = 0
+shadow.ZIndex = -1
+shadow.Parent = mainFrame
+
+local shadowCorner = Instance.new("UICorner")
+shadowCorner.CornerRadius = UDim.new(0, 12)
+shadowCorner.Parent = shadow
+
+-- Title
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 30)
+title.Position = UDim2.new(0, 0, 0, 5)
+title.BackgroundTransparency = 1
+title.Text = "⚔️ Sab Helper"
+title.TextColor3 = Color3.new(1, 1, 1)
+title.Font = Enum.Font.GothamBold
+title.TextSize = 16
+title.Parent = mainFrame
+
+-- Scrolling frame
+local scrollFrame = Instance.new("ScrollingFrame")
+scrollFrame.Size = UDim2.new(1, -10, 1, -40)
+scrollFrame.Position = UDim2.new(0, 5, 0, 35)
+scrollFrame.BackgroundTransparency = 1
+scrollFrame.ScrollBarThickness = 4
+scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 500)
+scrollFrame.Parent = mainFrame
+
+local uiListLayout = Instance.new("UIListLayout")
+uiListLayout.Padding = UDim.new(0, 6)
+uiListLayout.Parent = scrollFrame
+
+-- Button creation function
+local function createButton(text, description, callback, color)
+    local buttonFrame = Instance.new("Frame")
+    buttonFrame.Size = UDim2.new(1, 0, 0, 45)
+    buttonFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+    buttonFrame.BorderSizePixel = 0
+    buttonFrame.Parent = scrollFrame
+    
+    local buttonCorner = Instance.new("UICorner")
+    buttonCorner.CornerRadius = UDim.new(0, 6)
+    buttonCorner.Parent = buttonFrame
+    
+    local button = Instance.new("TextButton")
+    button.Size = UDim2.new(1, -6, 1, -6)
+    button.Position = UDim2.new(0, 3, 0, 3)
+    button.BackgroundColor3 = color or Color3.fromRGB(0, 120, 255)
+    button.TextColor3 = Color3.new(1, 1, 1)
+    button.Text = text
+    button.Font = Enum.Font.GothamBold
+    button.TextSize = 12
+    button.BorderSizePixel = 0
+    button.Parent = buttonFrame
+    
+    local btnCorner = Instance.new("UICorner")
+    btnCorner.CornerRadius = UDim.new(0, 4)
+    btnCorner.Parent = button
+    
+    button.MouseButton1Click:Connect(callback)
+    
+    return buttonFrame
+end
+
+-- Platform function
+local function createPlatform()
+    if not LocalPlayer.Character then return end
+    
+    local humanoidRootPart = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not humanoidRootPart then return end
+    
+    -- Remove old platform
+    local oldPlatform = workspace:FindFirstChild("PlayerPlatform")
+    if oldPlatform then
+        oldPlatform:Destroy()
+    end
+    
+    -- Create new platform
+    local platform = Instance.new("Part")
+    platform.Name = "PlayerPlatform"
+    platform.Size = Vector3.new(15, 1, 15)
+    platform.Position = humanoidRootPart.Position - Vector3.new(0, 5, 0)
+    platform.Anchored = true
+    platform.CanCollide = true
+    platform.Material = Enum.Material.Neon
+    platform.BrickColor = BrickColor.new("Bright blue")
+    platform.Transparency = 0.2
+    platform.Parent = workspace
+    
+    local sparkles = Instance.new("Sparkles")
+    sparkles.SparkleColor = Color3.new(0, 0.5, 1)
+    sparkles.Parent = platform
+    
+    task.wait(30)
+    if platform and platform.Parent then
+        platform:Destroy()
+    end
+end
+
+-- Speed boost
+local function toggleSpeed()
+    _G.speedEnabled = not _G.speedEnabled
+    local humanoid = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+    
+    if humanoid then
+        if _G.speedEnabled then
+            humanoid.WalkSpeed = 50
+        else
+            humanoid.WalkSpeed = 16
+        end
+    end
+end
+
+-- Infinite jump
+local function toggleInfiniteJump()
+    _G.infiniteJump = not _G.infiniteJump
+    
+    if _G.infiniteJump then
+        local connection
+        connection = UserInputService.JumpRequest:Connect(function()
+            if LocalPlayer.Character then
+                local humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+                if humanoid then
+                    humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+                end
+            end
+        end)
+        _G.jumpConnection = connection
+    else
+        if _G.jumpConnection then
+            _G.jumpConnection:Disconnect()
+        end
+    end
+end
+
+-- No clip
+local function toggleNoClip()
+    _G.noClip = not _G.noClip
+    
+    if _G.noClip then
+        local connection
+        connection = RunService.Stepped:Connect(function()
+            if not _G.noClip or not LocalPlayer.Character then
+                connection:Disconnect()
+                return
+            end
+            
+            for _, part in pairs(LocalPlayer.Character:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    part.CanCollide = false
+                end
+            end
+        end)
+    end
+end
+
+-- Fly
+local function toggleFly()
+    _G.flyEnabled = not _G.flyEnabled
+    
+    if _G.flyEnabled then
+        local character = LocalPlayer.Character
+        if not character then return end
+        
+        local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+        if not humanoidRootPart then return end
+        
+        _G.bodyVelocity = Instance.new("BodyVelocity")
+        _G.bodyVelocity.Velocity = Vector3.new(0, 0, 0)
+        _G.bodyVelocity.MaxForce = Vector3.new(40000, 40000, 40000)
+        _G.bodyVelocity.Parent = humanoidRootPart
+        
+        _G.flyConnection = RunService.Heartbeat:Connect(function()
+            if not _G.flyEnabled or not character then
+                if _G.flyConnection then
+                    _G.flyConnection:Disconnect()
+                end
+                return
+            end
+            
+            local camera = workspace.CurrentCamera
+            local moveDir = Vector3.new(0, 0, 0)
+            
+            if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+                moveDir = moveDir + camera.CFrame.LookVector
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+                moveDir = moveDir - camera.CFrame.LookVector
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+                moveDir = moveDir - camera.CFrame.RightVector
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+                moveDir = moveDir + camera.CFrame.RightVector
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+                moveDir = moveDir + Vector3.new(0, 1, 0)
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
+                moveDir = moveDir - Vector3.new(0, 1, 0)
+            end
+            
+            _G.bodyVelocity.Velocity = moveDir * 50
+        end)
+    else
+        if _G.bodyVelocity then
+            _G.bodyVelocity:Destroy()
+        end
+        if _G.flyConnection then
+            _G.flyConnection:Disconnect()
+        end
+    end
+end
+
+-- Anti-afk
+local function toggleAntiAfk()
+    _G.antiAfk = not _G.antiAfk
+    
+    if _G.antiAfk then
+        _G.afkConnection = RunService.Heartbeat:Connect(function()
+            if not _G.antiAfk then
+                _G.afkConnection:Disconnect()
+                return
+            end
+            LocalPlayer:GetMouse().Move()
+        end)
+    else
+        if _G.afkConnection then
+            _G.afkConnection:Disconnect()
+        end
+    end
+end
+
+-- Create buttons
+createButton("🏗️ Platform", "Spawn platform below you", createPlatform, Color3.fromRGB(0, 150, 255))
+createButton("⚡ Speed (50)", "Toggle super speed", toggleSpeed, Color3.fromRGB(255, 150, 0))
+createButton("🦘 Inf Jump", "Toggle infinite jump", toggleInfiniteJump, Color3.fromRGB(0, 200, 100))
+createButton("👻 NoClip", "Walk through walls", toggleNoClip, Color3.fromRGB(150, 100, 255))
+createButton("🚀 Fly", "Toggle flight mode", toggleFly, Color3.fromRGB(255, 100, 100))
+createButton("⏰ Anti-AFK", "Prevent AFK kick", toggleAntiAfk, Color3.fromRGB(255, 200, 50))
+createButton("📢 Discord", "Join our Discord", function()
+    pcall(function()
+        setclipboard("https://discord.gg/9BDbbzWQKV")
+    end)
+    
+    local notif = Instance.new("TextLabel")
+    notif.Size = UDim2.new(0, 200, 0, 40)
+    notif.Position = UDim2.new(0.5, -100, 0.9, 0)
+    notif.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
+    notif.Text = "✅ Discord link copied!"
+    notif.TextColor3 = Color3.new(1, 1, 1)
+    notif.Font = Enum.Font.GothamBold
+    notif.TextSize = 14
+    notif.Parent = SabGui
+    
+    local notifCorner = Instance.new("UICorner")
+    notifCorner.CornerRadius = UDim.new(0, 8)
+    notifCorner.Parent = notif
+    
+    task.wait(3)
+    notif:Destroy()
+end, Color3.fromRGB(88, 101, 242))
+
+createButton("❌ Close", "Close the helper", function()
+    SabGui:Destroy()
+    -- Cleanup
+    if _G.jumpConnection then _G.jumpConnection:Disconnect() end
+    if _G.bodyVelocity then _G.bodyVelocity:Destroy() end
+    if _G.flyConnection then _G.flyConnection:Disconnect() end
+    if _G.afkConnection then _G.afkConnection:Disconnect() end
+end, Color3.fromRGB(100, 100, 100))
+
+-- Auto-resize scroll
+uiListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    scrollFrame.CanvasSize = UDim2.new(0, 0, 0, uiListLayout.AbsoluteContentSize.Y + 10)
+end)
+
+-- Draggable
+local dragging = false
+local dragInput, dragStart, startPos
+
+mainFrame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = mainFrame.Position
+        
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+
+mainFrame.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement then
+        dragInput = input
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        local delta = input.Position - dragStart
+        mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
+
+-- Success notification
+local notif = Instance.new("TextLabel")
+notif.Size = UDim2.new(0, 220, 0, 40)
+notif.Position = UDim2.new(0.5, -110, 0.1, 0)
+notif.BackgroundColor3 = Color3.fromRGB(50, 255, 50)
+notif.Text = "✅ Sab Helper Loaded!"
+notif.TextColor3 = Color3.new(1, 1, 1)
+notif.Font = Enum.Font.GothamBold
+notif.TextSize = 14
+notif.Parent = SabGui
+
+local notifCorner = Instance.new("UICorner")
+notifCorner.CornerRadius = UDim.new(0, 8)
+notifCorner.Parent = notif
+
+task.wait(3)
+notif:Destroy()
+
+print("Sab Helper loaded successfully!")
+    
