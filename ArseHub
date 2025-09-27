@@ -35,8 +35,8 @@ local function createKeyGUI()
     keyGui.Parent = CoreGui
 
     local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(0, 320, 0, 200)
-    frame.Position = UDim2.new(0.5, -160, 0.5, -100)
+    frame.Size = UDim2.new(0, 320, 0, 250) -- Increased height for Discord button
+    frame.Position = UDim2.new(0.5, -160, 0.5, -125)
     frame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
     frame.BorderSizePixel = 1
     frame.BorderColor3 = Color3.fromRGB(60, 60, 80)
@@ -94,7 +94,7 @@ local function createKeyGUI()
 
     local button = Instance.new("TextButton")
     button.Size = UDim2.new(0.7, 0, 0, 35)
-    button.Position = UDim2.new(0.15, 0, 0.8, 0)
+    button.Position = UDim2.new(0.15, 0, 0.75, 0) -- Adjusted position
     button.Text = "🔑 Submit Key"
     button.Font = Enum.Font.GothamBold
     button.TextSize = 16
@@ -105,6 +105,21 @@ local function createKeyGUI()
     buttonCorner.CornerRadius = UDim.new(0, 6)
     buttonCorner.Parent = button
     button.Parent = frame
+
+    -- Discord Button
+    local discordButton = Instance.new("TextButton")
+    discordButton.Size = UDim2.new(0.7, 0, 0, 35)
+    discordButton.Position = UDim2.new(0.15, 0, 0.9, 0) -- Positioned below submit button
+    discordButton.Text = "📱 Join Discord Server For Key"
+    discordButton.Font = Enum.Font.GothamBold
+    discordButton.TextSize = 14
+    discordButton.BackgroundColor3 = Color3.fromRGB(88, 101, 242) -- Discord blue color
+    discordButton.TextColor3 = Color3.new(1, 1, 1)
+    
+    local discordButtonCorner = Instance.new("UICorner")
+    discordButtonCorner.CornerRadius = UDim.new(0, 6)
+    discordButtonCorner.Parent = discordButton
+    discordButton.Parent = frame
 
     local function handleSubmit()
         if keyAuthentication.locked then
@@ -124,6 +139,7 @@ local function createKeyGUI()
             TweenService:Create(frame, tweenInfo, {BackgroundTransparency = 1}):Play()
             TweenService:Create(textbox, tweenInfo, {BackgroundTransparency = 1, TextTransparency = 1}):Play()
             TweenService:Create(button, tweenInfo, {BackgroundTransparency = 1, TextTransparency = 1}):Play()
+            TweenService:Create(discordButton, tweenInfo, {BackgroundTransparency = 1, TextTransparency = 1}):Play()
             TweenService:Create(title, tweenInfo, {TextTransparency = 1}):Play()
             TweenService:Create(statusLabel, tweenInfo, {TextTransparency = 1}):Play()
             TweenService:Create(warningLabel, tweenInfo, {TextTransparency = 1}):Play()
@@ -152,6 +168,28 @@ local function createKeyGUI()
             end
         end
     end
+
+    -- Discord button functionality
+    discordButton.MouseButton1Click:Connect(function()
+        local discordLink = "https://discord.gg/9BDbbzWQKV"
+        
+        -- Try to copy to clipboard
+        pcall(function()
+            setclipboard(discordLink)
+        end)
+        
+        -- Show confirmation message
+        local originalText = discordButton.Text
+        discordButton.Text = "✅ Copied to clipboard!"
+        discordButton.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
+        
+        -- Reset button after 2 seconds
+        task.wait(2)
+        if discordButton then
+            discordButton.Text = originalText
+            discordButton.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
+        end
+    end)
 
     button.MouseButton1Click:Connect(handleSubmit)
     textbox.FocusLost:Connect(function(enterPressed)
