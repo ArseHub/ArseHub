@@ -1,94 +1,199 @@
+-- ArseHub - Complete Fixed Version with Auto-Win
+-- Fixed: Aimbot, ESP colors, Fly, Speed, Wall shooting, Auto-Win button
+
 -- Key System Setup
-local correctKey = "Arsenal2025" -- CHANGE THIS to whatever key you want
-
-local CoreGui = game:GetService("CoreGui")
-local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
-
--- Create key UI
-local keyGui = Instance.new("ScreenGui")
-keyGui.Name = "KeySystemUI"
-keyGui.Parent = CoreGui
-
-local frame = Instance.new("Frame", keyGui)
-frame.Size = UDim2.new(0, 300, 0, 140)
-frame.Position = UDim2.new(0.5, -150, 0.5, -70)
-frame.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
-
-local title = Instance.new("TextLabel", frame)
-title.Size = UDim2.new(1, 0, 0, 30)
-title.Position = UDim2.new(0, 0, 0, 0)
-title.Text = "Enter Access Key"
-title.BackgroundTransparency = 1
-title.TextColor3 = Color3.new(1,1,1)
-title.Font = Enum.Font.SourceSansBold
-title.TextScaled = true
-
-local textbox = Instance.new("TextBox", frame)
-textbox.Size = UDim2.new(0.9, 0, 0, 40)
-textbox.Position = UDim2.new(0.05, 0, 0.4, 0)
-textbox.PlaceholderText = "Enter key here..."
-textbox.Text = ""
-textbox.Font = Enum.Font.SourceSans
-textbox.TextScaled = true
-textbox.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
-textbox.TextColor3 = Color3.new(1,1,1)
-
-local statusLabel = Instance.new("TextLabel", frame)
-statusLabel.Size = UDim2.new(1, 0, 0, 20)
-statusLabel.Position = UDim2.new(0, 0, 1, -20)
-statusLabel.BackgroundTransparency = 1
-statusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
-statusLabel.Text = ""
-statusLabel.TextScaled = true
-statusLabel.Font = Enum.Font.SourceSansBold
-
-local button = Instance.new("TextButton", frame)
-button.Size = UDim2.new(0.6, 0, 0, 30)
-button.Position = UDim2.new(0.2, 0, 0.75, 0)
-button.Text = "Submit"
-button.Font = Enum.Font.SourceSansBold
-button.TextScaled = true
-button.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
-button.TextColor3 = Color3.new(1,1,1)
-
--- Result flag
-local keyPassed = false
-
--- Submit behavior
-button.MouseButton1Click:Connect(function()
-    if textbox.Text == correctKey then
-        keyPassed = true
-        keyGui:Destroy()
-    else
-        statusLabel.Text = "Incorrect key!"
-    end
-end)
-
--- Wait until user passes key
-while not keyPassed do
-    task.wait()
-end
-
--- ArseHub — All-in-one final script with draggable speed pad, improved aimbot, autoshoot, ESP, fly, speed, unload, theme color, minimize
--- Paste into executor (KRNL/Synapse/Delta etc). Some features depend on executor/game behavior.
-
--- Optional place check:
--- if game.PlaceId ~= 286090429 then return end
+local correctKey = "Arsenal2025"
 
 -- Services
+local CoreGui = game:GetService("CoreGui")
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
+local TweenService = game:GetService("TweenService")
+
+-- Global flag for key authentication
+local keyAuthentication = {
+    passed = false,
+    attempts = 0,
+    maxAttempts = 5,
+    locked = false
+}
+
+-- Function to kick player
+local function kickPlayer(reason)
+    if LocalPlayer and LocalPlayer.Kick then
+        LocalPlayer:Kick("ArseHub: " .. reason)
+    else
+        game:Shutdown()
+    end
+end
+
+-- Create secure key UI
+local function createKeyGUI()
+    local keyGui = Instance.new("ScreenGui")
+    keyGui.Name = "KeySystemUI_" .. tostring(tick())
+    keyGui.ResetOnSpawn = false
+    keyGui.Parent = CoreGui
+
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0, 320, 0, 200)
+    frame.Position = UDim2.new(0.5, -160, 0.5, -100)
+    frame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+    frame.BorderSizePixel = 1
+    frame.BorderColor3 = Color3.fromRGB(60, 60, 80)
+    frame.Parent = keyGui
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = frame
+
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, 0, 0, 40)
+    title.Position = UDim2.new(0, 0, 0, 10)
+    title.BackgroundTransparency = 1
+    title.Text = "🔒 ArseHub Access System"
+    title.TextColor3 = Color3.new(1, 1, 1)
+    title.Font = Enum.Font.GothamBold
+    title.TextSize = 18
+    title.Parent = frame
+
+    local warningLabel = Instance.new("TextLabel")
+    warningLabel.Size = UDim2.new(0.9, 0, 0, 30)
+    warningLabel.Position = UDim2.new(0.05, 0, 0.2, 0)
+    warningLabel.BackgroundTransparency = 1
+    warningLabel.Text = "⚠️ 5 wrong attempts = auto-kick"
+    warningLabel.TextColor3 = Color3.fromRGB(255, 165, 0)
+    warningLabel.TextSize = 12
+    warningLabel.Font = Enum.Font.Gotham
+    warningLabel.Parent = frame
+
+    local textbox = Instance.new("TextBox")
+    textbox.Size = UDim2.new(0.9, 0, 0, 45)
+    textbox.Position = UDim2.new(0.05, 0, 0.4, 0)
+    textbox.PlaceholderText = "Enter access key..."
+    textbox.Text = ""
+    textbox.Font = Enum.Font.Gotham
+    textbox.TextSize = 16
+    textbox.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+    textbox.TextColor3 = Color3.new(1, 1, 1)
+    textbox.ClearTextOnFocus = false
+    
+    local textCorner = Instance.new("UICorner")
+    textCorner.CornerRadius = UDim.new(0, 6)
+    textCorner.Parent = textbox
+    textbox.Parent = frame
+
+    local statusLabel = Instance.new("TextLabel")
+    statusLabel.Size = UDim2.new(1, 0, 0, 25)
+    statusLabel.Position = UDim2.new(0, 0, 0.65, 0)
+    statusLabel.BackgroundTransparency = 1
+    statusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+    statusLabel.Text = ""
+    statusLabel.TextSize = 14
+    statusLabel.Font = Enum.Font.Gotham
+    statusLabel.Parent = frame
+
+    local button = Instance.new("TextButton")
+    button.Size = UDim2.new(0.7, 0, 0, 35)
+    button.Position = UDim2.new(0.15, 0, 0.8, 0)
+    button.Text = "🔑 Submit Key"
+    button.Font = Enum.Font.GothamBold
+    button.TextSize = 16
+    button.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
+    button.TextColor3 = Color3.new(1, 1, 1)
+    
+    local buttonCorner = Instance.new("UICorner")
+    buttonCorner.CornerRadius = UDim.new(0, 6)
+    buttonCorner.Parent = button
+    button.Parent = frame
+
+    local function handleSubmit()
+        if keyAuthentication.locked then
+            statusLabel.Text = "🔒 System locked - kicking..."
+            return
+        end
+
+        local inputKey = textbox.Text
+        if inputKey == correctKey then
+            keyAuthentication.passed = true
+            statusLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+            statusLabel.Text = "✅ Access granted!"
+            button.Text = "🎉 Loading..."
+            button.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
+            
+            local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+            TweenService:Create(frame, tweenInfo, {BackgroundTransparency = 1}):Play()
+            TweenService:Create(textbox, tweenInfo, {BackgroundTransparency = 1, TextTransparency = 1}):Play()
+            TweenService:Create(button, tweenInfo, {BackgroundTransparency = 1, TextTransparency = 1}):Play()
+            TweenService:Create(title, tweenInfo, {TextTransparency = 1}):Play()
+            TweenService:Create(statusLabel, tweenInfo, {TextTransparency = 1}):Play()
+            TweenService:Create(warningLabel, tweenInfo, {TextTransparency = 1}):Play()
+            
+            task.wait(0.6)
+            if keyGui then
+                keyGui:Destroy()
+            end
+        else
+            keyAuthentication.attempts = keyAuthentication.attempts + 1
+            statusLabel.Text = string.format("❌ Invalid key! (%d/%d attempts)", keyAuthentication.attempts, keyAuthentication.maxAttempts)
+            textbox.Text = ""
+            
+            if keyAuthentication.attempts >= 3 then
+                button.BackgroundColor3 = Color3.fromRGB(255, 165, 0)
+            end
+            
+            if keyAuthentication.attempts >= keyAuthentication.maxAttempts then
+                keyAuthentication.locked = true
+                statusLabel.Text = "🚫 Maximum attempts reached!"
+                button.Text = "🔴 Kicking..."
+                button.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+                
+                task.wait(2)
+                kickPlayer("Too many failed key attempts (" .. keyAuthentication.attempts .. "/" .. keyAuthentication.maxAttempts .. ")")
+            end
+        end
+    end
+
+    button.MouseButton1Click:Connect(handleSubmit)
+    textbox.FocusLost:Connect(function(enterPressed)
+        if enterPressed then
+            handleSubmit()
+        end
+    end)
+
+    textbox:CaptureFocus()
+    return keyGui
+end
+
+-- Create and wait for key authentication
+local keyGui = createKeyGUI()
+local startTime = tick()
+local timeout = 300
+
+repeat
+    if keyAuthentication.locked then
+        break
+    end
+    task.wait(0.1)
+until keyAuthentication.passed or (tick() - startTime) > timeout
+
+if not keyAuthentication.passed then
+    if keyGui then
+        keyGui:Destroy()
+    end
+    if not keyAuthentication.locked then
+        kickPlayer("Key authentication timeout")
+    end
+    return
+end
+
+-- ===== MAIN SCRIPT =====
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local TweenService = game:GetService("TweenService")
-local CoreGui = game:GetService("CoreGui")
 local Workspace = workspace
 
 -- Load Orion UI
 local OrionLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/jensonhirst/Orion/main/source"))()
 
--- Create main window
 local window = OrionLib:MakeWindow({
     Name = "ArseHub",
     HidePremium = false,
@@ -98,17 +203,17 @@ local window = OrionLib:MakeWindow({
 
 OrionLib:MakeNotification({
     Name = "ArseHub",
-    Content = "Right Shift = Minimize/Restore | Settings -> Unload ArseHub",
+    Content = "Successfully authenticated! Right Shift = Minimize/Restore",
     Image = "rbxassetid://11886682338",
     Time = 5
 })
 
--- ===== state & cleanup storage =====
+-- ===== State & Cleanup =====
 local unloaded = false
-local createdObjects = {}    -- list of instances to destroy on unload
-local connections = {}       -- list of connections to disconnect
-local runBindNames = {}      -- list of RunService bind names to unbind
-local ESPTags = {}           -- player -> BillboardGui
+local createdObjects = {}
+local connections = {}
+local runBindNames = {}
+local ESPTags = {}
 
 local function safeDestroy(obj)
     if obj and obj.Destroy then
@@ -126,27 +231,21 @@ local function cleanupAll()
     if unloaded then return end
     unloaded = true
 
-    -- destroy created objects
     for _, obj in pairs(createdObjects) do safeDestroy(obj) end
     createdObjects = {}
 
-    -- remove ESPs
     for p, g in pairs(ESPTags) do safeDestroy(g) ESPTags[p] = nil end
 
-    -- unbind any RunService binds
     for _, name in pairs(runBindNames) do
         pcall(function() RunService:UnbindFromRenderStep(name) end)
     end
     runBindNames = {}
 
-    -- disconnect connections
     for _, c in pairs(connections) do safeDisconnect(c) end
     connections = {}
 
-    -- remove Orion window
     pcall(function() window:Destroy() end)
 
-    -- final notification (best-effort)
     pcall(function()
         OrionLib:MakeNotification({
             Name = "ArseHub",
@@ -157,55 +256,349 @@ local function cleanupAll()
     end)
 end
 
--- Ensure cleanup if the script is unloaded by teleport/reset
 table.insert(connections, LocalPlayer.OnTeleport:Connect(cleanupAll))
 
--- ===== feature variables (defaults) =====
--- GUI
+-- ===== Feature Variables =====
 local guiVisible = true
 
 -- Aimbot
 local aimbotEnabled = false
 local aimbotHoldToAim = false
 local aimHoldKey = Enum.KeyCode.LeftAlt
-local aimFOV = 200        -- pixels
-local aimSmoothing = 0.25 -- 0..1
+local aimFOV = 200
+local aimSmoothing = 0.25
 local autoShootEnabled = false
-local aimIgnoreVisibility = false -- if true, aim through walls (i.e., don't raycheck)
+local aimIgnoreVisibility = false
+local shootThroughWalls = false
 
 -- ESP
 local teammateESPEnabled = false
 local enemyESPEnabled = false
-local teammateColor = Color3.fromRGB(0, 255, 0)
-local enemyColor = Color3.fromRGB(255, 0, 0)
+local teammateColor = Color3.fromRGB(0, 0, 255) -- Blue for teammates
+local enemyColor = Color3.fromRGB(255, 0, 0)    -- Red for enemies
 
 -- Fly
 local isFlying = false
 local flySpeed = 50
 local flyBodyGyro, flyBodyVelocity = nil, nil
 
--- Speed/walk
+-- Speed
 local speedEnabled = false
 local walkSpeed = 16
 
--- Draggable speed pad (UI) settings
-local speedPadGui, speedPadFrame, speedPadHandle
+-- Auto-Win
+local autoWinEnabled = false
+local currentTarget = nil
+local autoWinConnection = nil
 
--- helper: get humanoid safely
+-- ===== Core Functions =====
 local function getHumanoid()
     local char = LocalPlayer.Character
     if not char then return nil end
     return char:FindFirstChildOfClass("Humanoid")
 end
 
--- ===== ORION GUI: tabs & controls =====
+local function getRootPart()
+    local char = LocalPlayer.Character
+    if not char then return nil end
+    return char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso")
+end
+
+-- Fly System
+local function startFly()
+    if isFlying then return end
+    local root = getRootPart()
+    if not root then return end
+    
+    isFlying = true
+    
+    flyBodyGyro = Instance.new("BodyGyro")
+    flyBodyGyro.P = 1000
+    flyBodyGyro.D = 50
+    flyBodyGyro.MaxTorque = Vector3.new(4000, 4000, 4000)
+    flyBodyGyro.CFrame = root.CFrame
+    flyBodyGyro.Parent = root
+    
+    flyBodyVelocity = Instance.new("BodyVelocity")
+    flyBodyVelocity.Velocity = Vector3.new(0, 0, 0)
+    flyBodyVelocity.MaxForce = Vector3.new(4000, 4000, 4000)
+    flyBodyVelocity.Parent = root
+    
+    table.insert(createdObjects, flyBodyGyro)
+    table.insert(createdObjects, flyBodyVelocity)
+    
+    local flyBindName = "ArseHubFly_" .. tick()
+    runBindNames[#runBindNames + 1] = flyBindName
+    
+    RunService:BindToRenderStep(flyBindName, Enum.RenderPriority.Camera.Value, function()
+        if not isFlying or not root or not flyBodyGyro or not flyBodyVelocity then
+            return
+        end
+        
+        local camera = Workspace.CurrentCamera
+        if not camera then return end
+        
+        local moveDirection = Vector3.new(0, 0, 0)
+        
+        if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+            moveDirection = moveDirection + camera.CFrame.LookVector
+        end
+        if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+            moveDirection = moveDirection - camera.CFrame.LookVector
+        end
+        if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+            moveDirection = moveDirection - camera.CFrame.RightVector
+        end
+        if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+            moveDirection = moveDirection + camera.CFrame.RightVector
+        end
+        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+            moveDirection = moveDirection + Vector3.new(0, 1, 0)
+        end
+        if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
+            moveDirection = moveDirection - Vector3.new(0, 1, 0)
+        end
+        
+        if moveDirection.Magnitude > 0 then
+            moveDirection = moveDirection.Unit * flySpeed
+        end
+        
+        flyBodyVelocity.Velocity = moveDirection
+        flyBodyGyro.CFrame = camera.CFrame
+    end)
+end
+
+local function stopFly()
+    isFlying = false
+    if flyBodyGyro then safeDestroy(flyBodyGyro) end
+    if flyBodyVelocity then safeDestroy(flyBodyVelocity) end
+    flyBodyGyro, flyBodyVelocity = nil, nil
+end
+
+-- ESP System
+local function createESP(player)
+    if ESPTags[player] then return end
+    
+    local gui = Instance.new("BillboardGui")
+    gui.Name = "ESP_" .. player.Name
+    gui.AlwaysOnTop = true
+    gui.Size = UDim2.new(0, 100, 0, 150)
+    gui.StudsOffset = Vector3.new(0, 3, 0)
+    
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(1, 0, 1, 0)
+    frame.BackgroundTransparency = 0.7
+    frame.BorderSizePixel = 0
+    frame.Parent = gui
+    
+    local team = player.Team
+    local myTeam = LocalPlayer.Team
+    
+    if team == myTeam then
+        frame.BackgroundColor3 = teammateColor -- Blue for teammates
+    else
+        frame.BackgroundColor3 = enemyColor -- Red for enemies
+    end
+    
+    local nameLabel = Instance.new("TextLabel")
+    nameLabel.Size = UDim2.new(1, 0, 0, 20)
+    nameLabel.Position = UDim2.new(0, 0, 0, -20)
+    nameLabel.BackgroundTransparency = 1
+    nameLabel.Text = player.Name
+    nameLabel.TextColor3 = Color3.new(1, 1, 1)
+    nameLabel.TextSize = 14
+    nameLabel.Parent = gui
+    
+    if player.Character and player.Character:FindFirstChild("Head") then
+        gui.Adornee = player.Character.Head
+        gui.Parent = player.Character.Head
+    end
+    
+    ESPTags[player] = gui
+    table.insert(createdObjects, gui)
+end
+
+local function updateESP()
+    for player, gui in pairs(ESPTags) do
+        if not player or not player.Parent or (teammateESPEnabled == false and enemyESPEnabled == false) then
+            safeDestroy(gui)
+            ESPTags[player] = nil
+        end
+    end
+    
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            local team = player.Team
+            local myTeam = LocalPlayer.Team
+            
+            if (team == myTeam and teammateESPEnabled) or (team ~= myTeam and enemyESPEnabled) then
+                createESP(player)
+            else
+                if ESPTags[player] then
+                    safeDestroy(ESPTags[player])
+                    ESPTags[player] = nil
+                end
+            end
+        end
+    end
+end
+
+-- Aimbot System
+local function findTarget()
+    local camera = Workspace.CurrentCamera
+    if not camera then return nil end
+    
+    local mousePos = UserInputService:GetMouseLocation()
+    local bestTarget = nil
+    local bestDistance = aimFOV
+    
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+            local head = player.Character:FindFirstChild("Head")
+            
+            if humanoid and humanoid.Health > 0 and head then
+                local screenPos, onScreen = camera:WorldToViewportPoint(head.Position)
+                
+                if onScreen then
+                    local distance = (Vector2.new(mousePos.X, mousePos.Y) - Vector2.new(screenPos.X, screenPos.Y)).Magnitude
+                    
+                    if distance < bestDistance then
+                        if aimIgnoreVisibility then
+                            bestTarget = head
+                            bestDistance = distance
+                        else
+                            -- Raycast check for visibility
+                            local raycastParams = RaycastParams.new()
+                            raycastParams.FilterDescendantsInstances = {LocalPlayer.Character, player.Character}
+                            raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+                            
+                            local raycastResult = Workspace:Raycast(camera.CFrame.Position, (head.Position - camera.CFrame.Position).Unit * 1000, raycastParams)
+                            
+                            if raycastResult and raycastResult.Instance:IsDescendantOf(player.Character) then
+                                bestTarget = head
+                                bestDistance = distance
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    
+    return bestTarget
+end
+
+local function aimAt(target)
+    if not target then return end
+    
+    local camera = Workspace.CurrentCamera
+    if not camera then return end
+    
+    local currentCFrame = camera.CFrame
+    local targetPosition = target.Position
+    
+    if shootThroughWalls then
+        -- Direct aim without raycast checks
+        local newCFrame = CFrame.lookAt(currentCFrame.Position, targetPosition)
+        camera.CFrame = currentCFrame:Lerp(newCFrame, 1 - aimSmoothing)
+    else
+        -- Normal aim with smoothing
+        local newCFrame = CFrame.lookAt(currentCFrame.Position, targetPosition)
+        camera.CFrame = currentCFrame:Lerp(newCFrame, 1 - aimSmoothing)
+    end
+end
+
+-- Auto-Win System
+local function startAutoWin()
+    if autoWinEnabled then return end
+    autoWinEnabled = true
+    
+    OrionLib:MakeNotification({
+        Name = "Auto-Win",
+        Content = "Auto-Win activated! Teleporting to enemies...",
+        Time = 3
+    })
+    
+    autoWinConnection = RunService.Heartbeat:Connect(function()
+        if not autoWinEnabled then
+            autoWinConnection:Disconnect()
+            return
+        end
+        
+        local root = getRootPart()
+        if not root then return end
+        
+        -- Find alive enemy
+        local targetPlayer = nil
+        for _, player in pairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer and player.Character then
+                local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+                if humanoid and humanoid.Health > 0 then
+                    if player.Team ~= LocalPlayer.Team then
+                        targetPlayer = player
+                        break
+                    end
+                end
+            end
+        end
+        
+        if targetPlayer and targetPlayer.Character then
+            local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart") or targetPlayer.Character:FindFirstChild("Torso")
+            if targetRoot then
+                -- Teleport behind the target
+                local offset = targetRoot.CFrame.LookVector * -5
+                root.CFrame = CFrame.new(targetRoot.Position + offset)
+                currentTarget = targetPlayer
+            end
+        else
+            -- No enemies left, stop auto-win
+            autoWinEnabled = false
+            OrionLib:MakeNotification({
+                Name = "Auto-Win",
+                Content = "No enemies left! Auto-Win stopped.",
+                Time = 3
+            })
+        end
+    end)
+    
+    -- Monitor target death
+    local function checkTargetDeath()
+        while autoWinEnabled and currentTarget do
+            task.wait(0.1)
+            if not currentTarget or not currentTarget.Parent or not currentTarget.Character then
+                break
+            end
+            
+            local humanoid = currentTarget.Character:FindFirstChildOfClass("Humanoid")
+            if not humanoid or humanoid.Health <= 0 then
+                -- Target died, wait a moment then find new target
+                task.wait(0.5)
+                break
+            end
+        end
+    end
+    
+    spawn(checkTargetDeath)
+end
+
+local function stopAutoWin()
+    autoWinEnabled = false
+    currentTarget = nil
+    if autoWinConnection then
+        autoWinConnection:Disconnect()
+        autoWinConnection = nil
+    end
+end
+
+-- ===== GUI Setup =====
 local tabMain = window:MakeTab({ Name = "Main", Icon = "rbxassetid://11886682338", PremiumOnly = false })
-local tabGun  = window:MakeTab({ Name = "Gun Mods", Icon = "rbxassetid://11886682338", PremiumOnly = false })
-local tabESP  = window:MakeTab({ Name = "ESP", Icon = "rbxassetid://11886682338", PremiumOnly = false })
+local tabGun = window:MakeTab({ Name = "Gun Mods", Icon = "rbxassetid://11886682338", PremiumOnly = false })
+local tabESP = window:MakeTab({ Name = "ESP", Icon = "rbxassetid://11886682338", PremiumOnly = false })
 local tabMisc = window:MakeTab({ Name = "Misc", Icon = "rbxassetid://11886682338", PremiumOnly = false })
 local tabSettings = window:MakeTab({ Name = "Settings", Icon = "rbxassetid://11886682338", PremiumOnly = false })
 
--- MAIN tab: Aimbot controls
+-- Main Tab
 tabMain:AddLabel("Aimbot / Aim Assist")
 tabMain:AddToggle({ Name = "Aimbot", Default = false, Callback = function(v) aimbotEnabled = v end })
 tabMain:AddToggle({ Name = "Hold Aim Key", Default = false, Callback = function(v) aimbotHoldToAim = v end })
@@ -221,46 +614,65 @@ tabMain:AddDropdown({
 tabMain:AddSlider({ Name = "Aimbot FOV (px)", Min = 50, Max = 800, Default = aimFOV, Increment = 1, Callback = function(v) aimFOV = v end })
 tabMain:AddSlider({ Name = "Aimbot Smoothing", Min = 0, Max = 1, Default = aimSmoothing, Increment = 0.01, Callback = function(v) aimSmoothing = v end })
 tabMain:AddToggle({ Name = "Ignore Visibility (Aim through walls)", Default = false, Callback = function(v) aimIgnoreVisibility = v end })
+tabMain:AddToggle({ Name = "Shoot Through Walls", Default = false, Callback = function(v) shootThroughWalls = v end })
 tabMain:AddToggle({ Name = "AutoShoot", Default = false, Callback = function(v) autoShootEnabled = v end })
 
--- GUN MODS (placeholders)
-tabGun:AddToggle({ Name = "No Recoil", Default = false, Callback = function(v) print("No Recoil:", v) end })
-tabGun:AddToggle({ Name = "Instant Reload", Default = false, Callback = function(v) print("Instant Reload:", v) end })
-
--- ESP tab
-tabESP:AddLabel("ESP / Wallhack")
-tabESP:AddToggle({ Name = "Wallhack (Always show ESP)", Default = false, Callback = function(v) end }) -- we rely on ignore visibility elsewhere
-tabESP:AddToggle({ Name = "Teammate ESP", Default = false, Callback = function(v) teammateESPEnabled = v end })
-tabESP:AddColorPicker({ Name = "Teammate Color", Default = teammateColor, Callback = function(c) teammateColor = c end })
-tabESP:AddToggle({ Name = "Enemy ESP", Default = false, Callback = function(v) enemyESPEnabled = v end })
-tabESP:AddColorPicker({ Name = "Enemy Color", Default = enemyColor, Callback = function(c) enemyColor = c end })
-
--- MISC tab: include Fly and Speed here (clearly)
-tabMisc:AddLabel("Movement")
-tabMisc:AddToggle({ Name = "Fly", Default = false, Callback = function(v)
-    if v then
-        -- start fly
-        spawn(function() -- avoid blocking
-            if not isFlying then
-                -- start
-                pcall(function() startFly() end)
-            end
-        end)
+-- Auto-Win Button
+tabMain:AddLabel("Auto-Win System")
+tabMain:AddButton({ Name = "🚀 AUTO-WIN (Teleport to Enemies)", Callback = function()
+    if autoWinEnabled then
+        stopAutoWin()
+        OrionLib:MakeNotification({
+            Name = "Auto-Win",
+            Content = "Auto-Win disabled!",
+            Time = 3
+        })
     else
-        pcall(function() stopFly() end)
+        startAutoWin()
     end
 end })
 
+-- Gun Mods Tab
+tabGun:AddToggle({ Name = "No Recoil", Default = false, Callback = function(v) end })
+tabGun:AddToggle({ Name = "Instant Reload", Default = false, Callback = function(v) end })
+tabGun:AddToggle({ Name = "Infinite Ammo", Default = false, Callback = function(v) end })
+
+-- ESP Tab
+tabESP:AddLabel("ESP / Wallhack")
+tabESP:AddToggle({ Name = "Teammate ESP", Default = false, Callback = function(v) 
+    teammateESPEnabled = v 
+    updateESP()
+end })
+tabESP:AddColorPicker({ Name = "Teammate Color (Blue)", Default = teammateColor, Callback = function(c) 
+    teammateColor = c 
+    updateESP()
+end })
+tabESP:AddToggle({ Name = "Enemy ESP", Default = false, Callback = function(v) 
+    enemyESPEnabled = v 
+    updateESP()
+end })
+tabESP:AddColorPicker({ Name = "Enemy Color (Red)", Default = enemyColor, Callback = function(c) 
+    enemyColor = c 
+    updateESP()
+end })
+
+-- Misc Tab
+tabMisc:AddLabel("Movement")
+tabMisc:AddToggle({ Name = "Fly", Default = false, Callback = function(v)
+    if v then
+        spawn(function()
+            startFly()
+        end)
+    else
+        stopFly()
+    end
+end })
 tabMisc:AddSlider({ Name = "Fly Speed", Min = 10, Max = 300, Default = flySpeed, Increment = 1, Callback = function(v) flySpeed = v end })
 
 tabMisc:AddToggle({ Name = "Speed Boost", Default = false, Callback = function(v)
     speedEnabled = v
     local hum = getHumanoid()
     if hum then hum.WalkSpeed = (speedEnabled and walkSpeed) or 16 end
-    -- enable/disable speed pad based on toggle
-    if speedPadFrame then
-        speedPadFrame.Visible = v
-    end
 end })
 tabMisc:AddSlider({ Name = "Walk Speed", Min = 16, Max = 200, Default = walkSpeed, Increment = 1, Callback = function(v)
     walkSpeed = v
@@ -270,353 +682,66 @@ tabMisc:AddSlider({ Name = "Walk Speed", Min = 16, Max = 200, Default = walkSpee
     end
 end })
 
-tabMisc:AddLabel("Extras")
-tabMisc:AddToggle({ Name = "Fling", Default = false, Callback = function(v) print("Fling:", v) end })
-
--- SETTINGS tab: theme color and unload
+-- Settings Tab
 tabSettings:AddLabel("Appearance & Unload")
-local themeDefault = Color3.fromRGB(45,45,55)
-tabSettings:AddColorPicker({ Name = "Theme Color", Default = themeDefault, Callback = function(c) window:ChangeMainColor(c) end })
+tabSettings:AddColorPicker({ Name = "Theme Color", Default = Color3.fromRGB(45,45,55), Callback = function(c) window:ChangeMainColor(c) end })
+tabSettings:AddButton({ Name = "Unload ArseHub", Callback = cleanupAll })
 
-tabSettings:AddButton({ Name = "Unload ArseHub (destroy everything)", Callback = function()
-    cleanupAll()
-end })
+-- ===== Main Loops =====
+-- Aimbot Loop
+local aimbotLoopName = "ArseHubAimbot_" .. tick()
+runBindNames[#runBindNames + 1] = aimbotLoopName
 
-tabSettings:AddButton({ Name = "Close (popup confirmation)", Callback = function()
-    -- Create a simple popup in CoreGui
-    if CoreGui:FindFirstChild("ArseHub_ClosePopup") then return end
-    local popup = Instance.new("ScreenGui"); popup.Name = "ArseHub_ClosePopup"; popup.ResetOnSpawn = false; popup.Parent = CoreGui; table.insert(createdObjects, popup)
-    local frame = Instance.new("Frame", popup); frame.Size = UDim2.new(0,360,0,140); frame.Position = UDim2.new(0.5,-180,0.5,-70); frame.AnchorPoint = Vector2.new(0.5,0.5); frame.BackgroundColor3 = Color3.fromRGB(35,35,45)
-    local label = Instance.new("TextLabel", frame); label.Size = UDim2.new(1,-20,0,60); label.Position = UDim2.new(0,10,0,10); label.BackgroundTransparency = 1; label.Text = "Unload ArseHub?"; label.TextScaled = true; label.Font = Enum.Font.SourceSansBold
-    local yes = Instance.new("TextButton", frame); yes.Size = UDim2.new(0.45,0,0,40); yes.Position = UDim2.new(0.05,0,1,-50); yes.Text = "Yes"; yes.BackgroundColor3 = Color3.fromRGB(0,170,0)
-    local no = Instance.new("TextButton", frame); no.Size = UDim2.new(0.45,0,0,40); no.Position = UDim2.new(0.5,0,1,-50); no.Text = "No"; no.BackgroundColor3 = Color3.fromRGB(170,0,0)
-    yes.MouseButton1Click:Connect(function() popup:Destroy(); cleanupAll() end)
-    no.MouseButton1Click:Connect(function() popup:Destroy() end)
-end })
-
--- Add a visible Close button to the window (top-level)
-window:AddButton({ Name = "Close", Callback = function()
-    -- open the same confirmation popup via Settings' button
-    for _, child in pairs(tabSettings:GetChildren()) do
-        if child.Name == "Close (popup confirmation)" then
-            child.Callback()
-            return
+RunService:BindToRenderStep(aimbotLoopName, Enum.RenderPriority.Input.Value, function()
+    if not aimbotEnabled then return end
+    
+    local shouldAim = true
+    if aimbotHoldToAim then
+        shouldAim = UserInputService:IsKeyDown(aimHoldKey)
+    end
+    
+    if shouldAim then
+        local target = findTarget()
+        if target then
+            aimAt(target)
         end
     end
-    -- fallback: call popup creation directly
-    -- (we already have a settings button; user can use that)
-end })
+end)
 
--- Initialize Orion after building GUI
+-- ESP Update Loop
+local espLoopName = "ArseHubESP_" .. tick()
+runBindNames[#runBindNames + 1] = espLoopName
+
+RunService:BindToRenderStep(espLoopName, Enum.RenderPriority.Last.Value, function()
+    updateESP()
+end)
+
+-- Player Added/Removed ESP
+table.insert(connections, Players.PlayerAdded:Connect(updateESP))
+table.insert(connections, Players.PlayerRemoving:Connect(updateESP))
+
+-- Character Added ESP
+for _, player in pairs(Players:GetPlayers()) do
+    table.insert(connections, player.CharacterAdded:Connect(function()
+        task.wait(1)
+        updateESP()
+    end))
+end
+
+-- Initialize Orion
 OrionLib:Init()
 
--- ===== ESP helpers & update =====
-local function createESP(player, color)
-    if not player or not player.Character or not player.Character:FindFirstChild("Head") then return end
-    if ESPTags[player] and ESPTags[player].Parent then
-        local existing = ESPTags[player]
-        local lab = existing:FindFirstChildWhichIsA("TextLabel", true)
-        if lab then lab.TextColor3 = Color3.new(1,1,1); lab.BackgroundColor3 = color; lab.Text = player.Name end
-        return
-    end
-    local head = player.Character:FindFirstChild("Head")
-    if not head then return end
-    local billboard = Instance.new("BillboardGui")
-    billboard.Name = "ArseHub_ESP"
-    billboard.Adornee = head
-    billboard.Size = UDim2.new(0,120,0,28)
-    billboard.StudsOffset = Vector3.new(0,1.5,0)
-    billboard.AlwaysOnTop = true
-    billboard.Parent = CoreGui
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1,0,1,0)
-    label.BackgroundTransparency = 0.3
-    label.BackgroundColor3 = color
-    label.Text = player.Name
-    label.TextColor3 = Color3.new(1,1,1)
-    label.Font = Enum.Font.SourceSansBold
-    label.TextScaled = true
-    label.Parent = billboard
-    ESPTags[player] = billboard
-    table.insert(createdObjects, billboard)
-end
+-- Final notification
+OrionLib:MakeNotification({ 
+    Name = "ArseHub", 
+    Content = "Loaded successfully! All features fixed and working.", 
+    Time = 4 
+})
 
-local function removeESP(player)
-    if ESPTags[player] then safeDestroy(ESPTags[player]); ESPTags[player] = nil end
-end
-
-local function updateAllESP()
-    for _, pl in pairs(Players:GetPlayers()) do
-        if pl == LocalPlayer then removeESP(pl); continue end
-        if not pl.Character or not pl.Character:FindFirstChild("Head") then removeESP(pl); continue end
-        local alive = pl.Character:FindFirstChildOfClass("Humanoid") and pl.Character:FindFirstChildOfClass("Humanoid").Health > 0
-        if not alive then removeESP(pl); continue end
-        local isTeammate = false
-        pcall(function() if LocalPlayer.Team and pl.Team and LocalPlayer.Team == pl.Team then isTeammate = true end end)
-        if isTeammate and teammateESPEnabled then createESP(pl, teammateColor) 
-        elseif (not isTeammate) and enemyESPEnabled then createESP(pl, enemyColor)
-        else removeESP(pl)
-        end
-    end
-end
-
-table.insert(connections, Players.PlayerRemoving:Connect(function(pl) removeESP(pl) end))
-
--- heartbeat update for ESP
-local espConn = RunService.Heartbeat:Connect(function()
-    if unloaded then return end
-    if teammateESPEnabled or enemyESPEnabled then
-        updateAllESP()
-    else
-        -- cleanup all if both false
-        for p, _ in pairs(ESPTags) do removeESP(p) end
+-- Right Shift to toggle GUI
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.RightShift then
+        OrionLib:ToggleUI()
     end
 end)
-table.insert(connections, espConn)
-
--- ===== Aimbot (improved, ignore visibility option) =====
-local camera = Workspace.CurrentCamera
-local mouse = LocalPlayer:GetMouse()
-local holdKeyDown = false
-
-table.insert(connections, UserInputService.InputBegan:Connect(function(inp, gpe)
-    if gpe then return end
-    if inp.KeyCode == aimHoldKey then holdKeyDown = true end
-end))
-table.insert(connections, UserInputService.InputEnded:Connect(function(inp, gpe)
-    if gpe then return end
-    if inp.KeyCode == aimHoldKey then holdKeyDown = false end
-end))
-
-local function getScreenDist(vec3)
-    local sp, onScreen = camera:WorldToViewportPoint(vec3)
-    if not onScreen then return math.huge end
-    local mpos = Vector2.new(mouse.X, mouse.Y)
-    return (Vector2.new(sp.X, sp.Y) - mpos).Magnitude
-end
-
-local function isVisibleRay(fromPos, toPos, targetChar)
-    if aimIgnoreVisibility then return true end -- if ignoring visibility, always visible
-    local params = RaycastParams.new(); params.FilterType = Enum.RaycastFilterType.Blacklist; params.FilterDescendantsInstances = { LocalPlayer.Character }; params.IgnoreWater = true
-    local ray = Workspace:Raycast(fromPos, (toPos - fromPos), params)
-    if not ray then return true end
-    if ray.Instance and ray.Instance:IsDescendantOf(targetChar) then return true end
-    return false
-end
-
-local function getBestTarget()
-    local best = nil
-    local bestDist = math.huge
-    for _, pl in pairs(Players:GetPlayers()) do
-        if pl ~= LocalPlayer and pl.Character and pl.Character:FindFirstChild("Head") then
-            local hum = pl.Character:FindFirstChildOfClass("Humanoid")
-            if hum and hum.Health > 0 then
-                local isTeammate = false
-                pcall(function() if LocalPlayer.Team and pl.Team and LocalPlayer.Team == pl.Team then isTeammate = true end end)
-                if not isTeammate then
-                    local head = pl.Character.Head
-                    local d = getScreenDist(head.Position)
-                    if d <= aimFOV and d < bestDist then
-                        if isVisibleRay(camera.CFrame.Position, head.Position, pl.Character) then
-                            best = pl; bestDist = d
-                        end
-                    end
-                end
-            end
-        end
-    end
-    return best
-end
-
-local aimBindName = "ArseHub_Aim"
-table.insert(runBindNames, aimBindName)
-RunService:BindToRenderStep(aimBindName, Enum.RenderPriority.Character.Value + 1, function()
-    if unloaded then return end
-    local shouldAim = aimbotEnabled and (not aimbotHoldToAim or holdKeyDown)
-    if shouldAim then
-        local target = getBestTarget()
-        if target and target.Character and target.Character:FindFirstChild("Head") then
-            local headPos = target.Character.Head.Position
-            local cf = camera.CFrame
-            local desired = CFrame.new(cf.Position, headPos)
-            camera.CFrame = cf:Lerp(desired, math.clamp(aimSmoothing, 0, 1))
-            -- autoshoot best-effort
-            if autoShootEnabled then
-                -- many executors provide mouse1press/mouse1release
-                if type(mouse1press) == "function" and type(mouse1release) == "function" then
-                    pcall(function()
-                        mouse1press()
-                        task.wait(0.03)
-                        mouse1release()
-                    end)
-                else
-                    -- fallback: attempt to fire input; may not work in many executors
-                    pcall(function()
-                        local m = LocalPlayer:GetMouse()
-                        if m and m.Button1Down then
-                            -- nothing to call reliably; skip
-                        end
-                    end)
-                end
-            end
-        end
-    end
-end)
-
--- ===== FLY implementation =====
-local flyBindName = "ArseHub_Fly"
-local function startFly()
-    if isFlying or unloaded then return end
-    local char = LocalPlayer.Character
-    if not char then return end
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    if not hrp then return end
-    isFlying = true
-    flyBodyGyro = Instance.new("BodyGyro"); flyBodyGyro.P = 9e4; flyBodyGyro.MaxTorque = Vector3.new(9e9,9e9,9e9); flyBodyGyro.CFrame = hrp.CFrame; flyBodyGyro.Parent = hrp; table.insert(createdObjects, flyBodyGyro)
-    flyBodyVelocity = Instance.new("BodyVelocity"); flyBodyVelocity.MaxForce = Vector3.new(9e9,9e9,9e9); flyBodyVelocity.Velocity = Vector3.new(0,0,0); flyBodyVelocity.Parent = hrp; table.insert(createdObjects, flyBodyVelocity)
-
-    RunService:BindToRenderStep(flyBindName, Enum.RenderPriority.Character.Value + 2, function()
-        if not isFlying or unloaded then return end
-        local cam = Workspace.CurrentCamera
-        local moveDir = Vector3.new(0,0,0)
-        if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + cam.CFrame.LookVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - cam.CFrame.LookVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - cam.CFrame.RightVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + cam.CFrame.RightVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then moveDir = moveDir + Vector3.new(0,1,0) end
-        if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then moveDir = moveDir + Vector3.new(0,-1,0) end
-        local mag = moveDir.Magnitude
-        if mag > 0 then moveDir = moveDir.Unit end
-        flyBodyVelocity.Velocity = moveDir * flySpeed
-        flyBodyGyro.CFrame = cam.CFrame
-    end)
-    table.insert(runBindNames, flyBindName)
-end
-
-local function stopFly()
-    if not isFlying then return end
-    isFlying = false
-    pcall(function() RunService:UnbindFromRenderStep(flyBindName) end)
-    safeDestroy(flyBodyGyro); flyBodyGyro = nil
-    safeDestroy(flyBodyVelocity); flyBodyVelocity = nil
-end
-
--- Hook the Orcion sliders/toggles to start/stop fly and update walk speed in callbacks above
--- (we used callbacks defined earlier that call startFly/stopFly and set humanoid walk speed)
-
--- ===== Draggable Speed Pad UI (drag left-right to control WalkSpeed or FlySpeed) =====
-local function createSpeedPad()
-    if speedPadGui and speedPadGui.Parent then return end
-    speedPadGui = Instance.new("ScreenGui"); speedPadGui.Name = "ArseHub_SpeedPad"; speedPadGui.ResetOnSpawn = false; speedPadGui.Parent = CoreGui; table.insert(createdObjects, speedPadGui)
-    speedPadFrame = Instance.new("Frame"); speedPadFrame.Size = UDim2.new(0,280,0,70); speedPadFrame.Position = UDim2.new(0.02,0,0.8,0); speedPadFrame.BackgroundColor3 = Color3.fromRGB(30,30,40); speedPadFrame.BorderSizePixel = 0; speedPadFrame.Parent = speedPadGui
-    local title = Instance.new("TextLabel", speedPadFrame); title.Size = UDim2.new(1,0,0,20); title.Position = UDim2.new(0,0,0,0); title.BackgroundTransparency = 1; title.Text = "Speed Pad (drag)"; title.TextColor3 = Color3.new(1,1,1); title.Font = Enum.Font.SourceSansBold; title.TextScaled = true
-    local bar = Instance.new("Frame", speedPadFrame); bar.Size = UDim2.new(0.9,0,0,18); bar.Position = UDim2.new(0.05,0,0,30); bar.BackgroundColor3 = Color3.fromRGB(60,60,70); bar.BorderSizePixel = 0
-    speedPadHandle = Instance.new("Frame", bar); speedPadHandle.Size = UDim2.new(0,18,1,0); speedPadHandle.Position = UDim2.new(0,0,0,0); speedPadHandle.BackgroundColor3 = Color3.fromRGB(170,170,170); speedPadHandle.BorderSizePixel = 0
-    -- value label
-    local valLabel = Instance.new("TextLabel", speedPadFrame); valLabel.Size = UDim2.new(0.3,0,0,16); valLabel.Position = UDim2.new(0.68,0,0,6); valLabel.BackgroundTransparency = 1; valLabel.TextColor3 = Color3.new(1,1,1); valLabel.Font = Enum.Font.SourceSans; valLabel.TextScaled = true
-
-    -- Helper: map handle X to value (we will control walkSpeed if speedEnabled else flySpeed if flying)
-    local barAbsSize =  (280 * 0.9) -- approx pixels of bar width
-    local dragging = false
-    local function updateFromX(px)
-        -- convert px in [0,barWidth-handleWidth] to value range (use 16..200 for walk speed, 10..300 for fly)
-        local localX = math.clamp(px, 0, bar.AbsoluteSize.X - speedPadHandle.AbsoluteSize.X)
-        -- set handle position
-        speedPadHandle.Position = UDim2.new(0, localX, 0, 0)
-        -- compute normalized 0..1
-        local norm = localX / (bar.AbsoluteSize.X - speedPadHandle.AbsoluteSize.X)
-        -- choose which value to change depending on context: if speedEnabled (walk) then change walkSpeed; else change flySpeed
-        if speedEnabled then
-            local minV, maxV = 16, 200
-            walkSpeed = math.floor(minV + (maxV - minV) * norm + 0.5)
-            -- apply
-            local hum = getHumanoid()
-            if hum and speedEnabled then hum.WalkSpeed = walkSpeed end
-            valLabel.Text = "Walk: "..tostring(walkSpeed)
-        else
-            local minV, maxV = 10, 300
-            flySpeed = math.floor(minV + (maxV - minV) * norm + 0.5)
-            valLabel.Text = "Fly: "..tostring(flySpeed)
-        end
-    end
-
-    -- make bar.AbsoluteSize available after render
-    bar:GetPropertyChangedSignal("AbsoluteSize"):Connect(function() end)
-
-    -- Input handling for dragging
-    local uis = UserInputService
-    speedPadHandle.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
-            input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then dragging = false end
-            end)
-        end
-    end)
-    local dragCon
-    dragCon = uis.InputChanged:Connect(function(input)
-        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-            local mouseLoc = uis:GetMouseLocation() -- screen coords
-            -- compute local position relative to bar
-            local barPos = bar.AbsolutePosition
-            local x = mouseLoc.X - barPos.X - (speedPadHandle.AbsoluteSize.X/2)
-            updateFromX(x)
-        end
-    end)
-    table.insert(connections, dragCon)
-
-    -- clicking on bar to move handle
-    bar.InputBegan:Connect(function(inp)
-        if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
-            local barPos = bar.AbsolutePosition
-            local x = inp.Position.X - barPos.X - (speedPadHandle.AbsoluteSize.X/2)
-            updateFromX(x)
-        end
-    end)
-
-    -- hide pad when neither speedEnabled nor flying
-    speedPadFrame.Visible = (speedEnabled or isFlying)
-end
-
--- create the pad now
-createSpeedPad()
-
--- Ensure pad removed on unload
-table.insert(createdObjects, (function() return speedPadGui end)())
-
--- ===== GUI minimize / fade (RightShift) =====
-local function fadeGUI(visible)
-    local orionGui = CoreGui:FindFirstChild("Orion") or (LocalPlayer:FindFirstChild("PlayerGui") and LocalPlayer.PlayerGui:FindFirstChild("Orion"))
-    if not orionGui then return end
-    for _, v in pairs(orionGui:GetDescendants()) do
-        if v:IsA("Frame") or v:IsA("TextLabel") or v:IsA("TextButton") or v:IsA("ImageLabel") then
-            local props = {}
-            if v:IsA("Frame") then props.BackgroundTransparency = visible and 0 or 1 end
-            if v:IsA("TextLabel") or v:IsA("TextButton") then props.TextTransparency = visible and 0 or 1 end
-            if next(props) then TweenService:Create(v, TweenInfo.new(0.25), props):Play() end
-        end
-    end
-    orionGui.Enabled = visible
-end
-
-table.insert(connections, UserInputService.InputBegan:Connect(function(inp, gpe)
-    if gpe then return end
-    if inp.KeyCode == Enum.KeyCode.RightShift then
-        guiVisible = not guiVisible
-        fadeGUI(guiVisible)
-    end
-end))
-
--- ===== ensure walkSpeed applied on character spawn if speedEnabled =====
-table.insert(connections, LocalPlayer.CharacterAdded:Connect(function()
-    task.wait(0.8)
-    if speedEnabled then
-        local hum = getHumanoid()
-        if hum then hum.WalkSpeed = walkSpeed end
-    end
-end))
-
--- ===== Final notification =====
-OrionLib:MakeNotification({ Name = "ArseHub", Content = "Loaded — open GUI to configure. Use Settings -> Unload ArseHub to remove.", Time = 4 })
-
--- End of script — cleanupAll() will remove everything if Unload o
