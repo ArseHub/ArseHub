@@ -1,0 +1,452 @@
+-- =========================================
+-- UNIVERSAL GAME SCRIPT (Works in EVERY Game)
+-- =========================================
+
+local UniversalScript = {}
+
+-- Services
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+
+-- Global variables
+UniversalScript.ESPEnabled = false
+UniversalScript.SpeedEnabled = false
+UniversalScript.FlyEnabled = false
+UniversalScript.WalkSpeed = 16
+UniversalScript.FlySpeed = 50
+UniversalScript.ESPTags = {}
+UniversalScript.FlyBodyVelocity = nil
+UniversalScript.FlyBodyGyro = nil
+
+-- Create GUI
+local UniversalGui = Instance.new("ScreenGui")
+UniversalGui.Name = "UniversalScript"
+UniversalGui.ResetOnSpawn = false
+UniversalGui.Parent = game:GetService("CoreGui")
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 300, 0, 450)
+mainFrame.Position = UDim2.new(0, 20, 0.5, -225)
+mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+mainFrame.BorderSizePixel = 0
+mainFrame.Parent = UniversalGui
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 12)
+corner.Parent = mainFrame
+
+-- Drop shadow
+local shadow = Instance.new("Frame")
+shadow.Size = UDim2.new(1, 6, 1, 6)
+shadow.Position = UDim2.new(0, -3, 0, -3)
+shadow.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+shadow.BackgroundTransparency = 0.9
+shadow.BorderSizePixel = 0
+shadow.ZIndex = -1
+shadow.Parent = mainFrame
+
+local shadowCorner = Instance.new("UICorner")
+shadowCorner.CornerRadius = UDim.new(0, 12)
+shadowCorner.Parent = shadow
+
+-- Title
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 40)
+title.Position = UDim2.new(0, 0, 0, 10)
+title.BackgroundTransparency = 1
+title.Text = "🎮 Universal Script"
+title.TextColor3 = Color3.new(1, 1, 1)
+title.Font = Enum.Font.GothamBold
+title.TextSize = 20
+title.Parent = mainFrame
+
+-- Scrolling frame
+local scrollFrame = Instance.new("ScrollingFrame")
+scrollFrame.Size = UDim2.new(1, -20, 1, -60)
+scrollFrame.Position = UDim2.new(0, 10, 0, 50)
+scrollFrame.BackgroundTransparency = 1
+scrollFrame.ScrollBarThickness = 6
+scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 700)
+scrollFrame.Parent = mainFrame
+
+local uiListLayout = Instance.new("UIListLayout")
+uiListLayout.Padding = UDim.new(0, 8)
+uiListLayout.Parent = scrollFrame
+
+-- Button creation function
+local function createButton(text, description, callback, color)
+    local buttonFrame = Instance.new("Frame")
+    buttonFrame.Size = UDim2.new(1, 0, 0, 70)
+    buttonFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+    buttonFrame.BorderSizePixel = 0
+    buttonFrame.Parent = scrollFrame
+    
+    local buttonCorner = Instance.new("UICorner")
+    buttonCorner.CornerRadius = UDim.new(0, 8)
+    buttonCorner.Parent = buttonFrame
+    
+    local button = Instance.new("TextButton")
+    button.Size = UDim2.new(1, -10, 0, 40)
+    button.Position = UDim2.new(0, 5, 0, 5)
+    button.BackgroundColor3 = color or Color3.fromRGB(0, 120, 255)
+    button.TextColor3 = Color3.new(1, 1, 1)
+    button.Text = text
+    button.Font = Enum.Font.GothamBold
+    button.TextSize = 14
+    button.Parent = buttonFrame
+    
+    local btnCorner = Instance.new("UICorner")
+    btnCorner.CornerRadius = UDim.new(0, 6)
+    btnCorner.Parent = button
+    
+    local descLabel = Instance.new("TextLabel")
+    descLabel.Size = UDim2.new(1, -10, 0, 20)
+    descLabel.Position = UDim2.new(0, 5, 0, 45)
+    descLabel.BackgroundTransparency = 1
+    descLabel.Text = description
+    descLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
+    descLabel.Font = Enum.Font.Gotham
+    descLabel.TextSize = 11
+    descLabel.TextXAlignment = Enum.TextXAlignment.Left
+    descLabel.Parent = buttonFrame
+    
+    button.MouseButton1Click:Connect(callback)
+    
+    return buttonFrame
+end
+
+-- ESP Functions
+function UniversalScript:ToggleESP()
+    self.ESPEnabled = not self.ESPEnabled
+    
+    if self.ESPEnabled then
+        self:CreateESPForAll()
+    else
+        self:RemoveAllESP()
+    end
+end
+
+function UniversalScript:CreateESPForAll()
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            self:CreateESP(player)
+        end
+    end
+end
+
+function UniversalScript:CreateESP(player)
+    if not player.Character then return end
+    
+    local head = player.Character:FindFirstChild("Head")
+    if not head then return end
+    
+    -- Remove existing ESP
+    self:RemoveESP(player)
+    
+    -- Create ESP Billboard
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "UniversalESP"
+    billboard.Adornee = head
+    billboard.Size = UDim2.new(0, 100, 0, 35)
+    billboard.StudsOffset = Vector3.new(0, 2, 0)
+    billboard.AlwaysOnTop = true
+    billboard.Parent = head
+    
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(1, 0, 1, 0)
+    frame.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+    frame.BackgroundTransparency = 0.3
+    frame.BorderSizePixel = 0
+    frame.Parent = billboard
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 4)
+    corner.Parent = frame
+    
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, 0, 1, 0)
+    label.BackgroundTransparency = 1
+    label.Text = player.Name
+    label.TextColor3 = Color3.new(1, 1, 1)
+    label.Font = Enum.Font.GothamBold
+    label.TextSize = 12
+    label.Parent = billboard
+    
+    self.ESPTags[player] = billboard
+end
+
+function UniversalScript:RemoveESP(player)
+    if self.ESPTags[player] then
+        self.ESPTags[player]:Destroy()
+        self.ESPTags[player] = nil
+    end
+end
+
+function UniversalScript:RemoveAllESP()
+    for player, esp in pairs(self.ESPTags) do
+        esp:Destroy()
+    end
+    self.ESPTags = {}
+end
+
+-- Speed Functions
+function UniversalScript:ToggleSpeed()
+    self.SpeedEnabled = not self.SpeedEnabled
+    
+    local humanoid = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+    if humanoid then
+        if self.SpeedEnabled then
+            humanoid.WalkSpeed = self.WalkSpeed
+        else
+            humanoid.WalkSpeed = 16
+        end
+    end
+end
+
+function UniversalScript:SetSpeed(speed)
+    self.WalkSpeed = speed
+    if self.SpeedEnabled then
+        local humanoid = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            humanoid.WalkSpeed = speed
+        end
+    end
+end
+
+-- Fly Functions
+function UniversalScript:ToggleFly()
+    self.FlyEnabled = not self.FlyEnabled
+    
+    if self.FlyEnabled then
+        self:StartFly()
+    else
+        self:StopFly()
+    end
+end
+
+function UniversalScript:StartFly()
+    local character = LocalPlayer.Character
+    if not character then return end
+    
+    local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+    if not humanoidRootPart then return end
+    
+    -- Create fly parts
+    self.FlyBodyVelocity = Instance.new("BodyVelocity")
+    self.FlyBodyVelocity.Velocity = Vector3.new(0, 0, 0)
+    self.FlyBodyVelocity.MaxForce = Vector3.new(40000, 40000, 40000)
+    self.FlyBodyVelocity.Parent = humanoidRootPart
+    
+    self.FlyBodyGyro = Instance.new("BodyGyro")
+    self.FlyBodyGyro.MaxTorque = Vector3.new(40000, 40000, 40000)
+    self.FlyBodyGyro.P = 1000
+    self.FlyBodyGyro.D = 50
+    self.FlyBodyGyro.Parent = humanoidRootPart
+    
+    -- Fly control connection
+    self.FlyConnection = RunService.Heartbeat:Connect(function()
+        if not self.FlyEnabled or not character then
+            self:StopFly()
+            return
+        end
+        
+        local camera = workspace.CurrentCamera
+        local moveDir = Vector3.new(0, 0, 0)
+        
+        if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+            moveDir = moveDir + camera.CFrame.LookVector
+        end
+        if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+            moveDir = moveDir - camera.CFrame.LookVector
+        end
+        if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+            moveDir = moveDir - camera.CFrame.RightVector
+        end
+        if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+            moveDir = moveDir + camera.CFrame.RightVector
+        end
+        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+            moveDir = moveDir + Vector3.new(0, 1, 0)
+        end
+        if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
+            moveDir = moveDir - Vector3.new(0, 1, 0)
+        end
+        
+        if moveDir.Magnitude > 0 then
+            moveDir = moveDir.Unit
+        end
+        
+        self.FlyBodyVelocity.Velocity = moveDir * self.FlySpeed
+        self.FlyBodyGyro.CFrame = camera.CFrame
+    end)
+end
+
+function UniversalScript:StopFly()
+    if self.FlyBodyVelocity then
+        self.FlyBodyVelocity:Destroy()
+        self.FlyBodyVelocity = nil
+    end
+    if self.FlyBodyGyro then
+        self.FlyBodyGyro:Destroy()
+        self.FlyBodyGyro = nil
+    end
+    if self.FlyConnection then
+        self.FlyConnection:Disconnect()
+        self.FlyConnection = nil
+    end
+end
+
+function UniversalScript:SetFlySpeed(speed)
+    self.FlySpeed = speed
+end
+
+-- Platform Function
+function UniversalScript:CreatePlatform()
+    local character = LocalPlayer.Character
+    if not character then return end
+    
+    local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+    if not humanoidRootPart then return end
+    
+    -- Remove old platform
+    local oldPlatform = workspace:FindFirstChild("UniversalPlatform")
+    if oldPlatform then
+        oldPlatform:Destroy()
+    end
+    
+    -- Create new platform
+    local platform = Instance.new("Part")
+    platform.Name = "UniversalPlatform"
+    platform.Size = Vector3.new(15, 1, 15)
+    platform.Position = humanoidRootPart.Position - Vector3.new(0, 5, 0)
+    platform.Anchored = true
+    platform.CanCollide = true
+    platform.Material = Enum.Material.Neon
+    platform.BrickColor = BrickColor.new("Bright blue")
+    platform.Transparency = 0.2
+    platform.Parent = workspace
+    
+    -- Add effects
+    local sparkles = Instance.new("Sparkles")
+    sparkles.SparkleColor = Color3.new(0, 0.5, 1)
+    sparkles.Parent = platform
+    
+    -- Add ArseHub text
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "PlatformText"
+    billboard.Adornee = platform
+    billboard.Size = UDim2.new(0, 200, 0, 50)
+    billboard.StudsOffset = Vector3.new(0, 3, 0)
+    billboard.AlwaysOnTop = true
+    billboard.Parent = platform
+    
+    local textLabel = Instance.new("TextLabel")
+    textLabel.Size = UDim2.new(1, 0, 1, 0)
+    textLabel.BackgroundTransparency = 1
+    textLabel.Text = "ArseHub"
+    textLabel.TextColor3 = Color3.new(1, 1, 1)
+    textLabel.TextScaled = true
+    textLabel.Font = Enum.Font.GothamBold
+    textLabel.Parent = billboard
+    
+    -- Make platform follow player
+    local followConnection
+    followConnection = RunService.Heartbeat:Connect(function()
+        if not platform or not platform.Parent then
+            followConnection:Disconnect()
+            return
+        end
+        
+        if character and humanoidRootPart then
+            local playerPos = humanoidRootPart.Position
+            platform.Position = Vector3.new(playerPos.X, playerPos.Y - 5, playerPos.Z)
+        end
+    end)
+    
+    -- Auto remove after 60 seconds
+    task.wait(60)
+    if platform and platform.Parent then
+        platform:Destroy()
+        followConnection:Disconnect()
+    end
+end
+
+-- Create GUI buttons
+createButton("👁️ Toggle ESP", "Show player names through walls", function()
+    UniversalScript:ToggleESP()
+end, Color3.fromRGB(255, 100, 100))
+
+createButton("⚡ Toggle Speed", "Enable/disable speed boost", function()
+    UniversalScript:ToggleSpeed()
+end, Color3.fromRGB(100, 255, 100))
+
+-- Speed slider
+local speedSliderFrame = Instance.new("Frame")
+speedSliderFrame.Size = UDim2.new(1, 0, 0, 60)
+speedSliderFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+speedSliderFrame.BorderSizePixel = 0
+speedSliderFrame.Parent = scrollFrame
+
+local speedSliderCorner = Instance.new("UICorner")
+speedSliderCorner.CornerRadius = UDim.new(0, 8)
+speedSliderCorner.Parent = speedSliderFrame
+
+local speedLabel = Instance.new("TextLabel")
+speedLabel.Size = UDim2.new(1, -10, 0, 20)
+speedLabel.Position = UDim2.new(0, 5, 0, 5)
+speedLabel.BackgroundTransparency = 1
+speedLabel.Text = "🏃 Speed: 16"
+speedLabel.TextColor3 = Color3.new(1, 1, 1)
+speedLabel.Font = Enum.Font.GothamBold
+speedLabel.TextSize = 12
+speedLabel.TextXAlignment = Enum.TextXAlignment.Left
+speedLabel.Parent = speedSliderFrame
+
+local speedSlider = Instance.new("TextButton")
+speedSlider.Size = UDim2.new(0.9, 0, 0, 20)
+speedSlider.Position = UDim2.new(0.05, 0, 0, 30)
+speedSlider.BackgroundColor3 = Color3.fromRGB(80, 80, 100)
+speedSlider.Text = ""
+speedSlider.Parent = speedSliderFrame
+
+local speedSliderCorner2 = Instance.new("UICorner")
+speedSliderCorner2.CornerRadius = UDim.new(0, 4)
+speedSliderCorner2.Parent = speedSlider
+
+local speedFill = Instance.new("Frame")
+speedFill.Size = UDim2.new(0.3, 0, 1, 0)
+speedFill.BackgroundColor3 = Color3.fromRGB(100, 255, 100)
+speedFill.BorderSizePixel = 0
+speedFill.Parent = speedSlider
+
+local speedFillCorner = Instance.new("UICorner")
+speedFillCorner.CornerRadius = UDim.new(0, 4)
+speedFillCorner.Parent = speedFill
+
+-- Speed slider functionality
+speedSlider.MouseButton1Down:Connect(function()
+    local connection
+    connection = RunService.Heartbeat:Connect(function()
+        local mouse = UserInputService:GetMouseLocation()
+        local sliderPos = speedSlider.AbsolutePosition
+        local sliderSize = speedSlider.AbsoluteSize
+        local percent = math.clamp((mouse.X - sliderPos.X) / sliderSize.X, 0, 1)
+        
+        local newSpeed = math.floor(16 + (100 - 16) * percent)
+        speedLabel.Text = "🏃 Speed: " .. newSpeed
+        speedFill.Size = UDim2.new(percent, 0, 1, 0)
+        
+        UniversalScript:SetSpeed(newSpeed)
+    end)
+    
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            connection:Disconnect()
+        end
+    end)
+end)
+
+createButton("🚀 Toggle Fly", "Enable/
